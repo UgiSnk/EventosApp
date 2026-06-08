@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Ecosistema Interactivo de Eventos</title>
+  <!-- Google Fonts: Outfit for titles, Inter for body -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/src/style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="header-logo">🌟 EVENTOS</div>
+      <div id="connection-status" class="status-badge disconnected">Conectando...</div>
+    </header>
+
+    <!-- Main Screens Container -->
+    <main class="app-main">
+      
+      <!-- Onboarding Screen -->
+      <section id="screen-onboarding" class="screen active">
+        <div class="glass-card onboarding-card">
+          <h1>¡Bienvenido a la Fiesta! 🎉</h1>
+          <p class="subtitle">Ingresá tus datos para empezar a interactuar en tiempo real con la fiesta.</p>
+          
+          <form id="form-onboarding">
+            <div class="form-group">
+              <label for="input-name">Nombre o Apodo</label>
+              <input type="text" id="input-name" placeholder="Ej. Lucas" required autocomplete="off">
+            </div>
+
+            <div class="form-group">
+              <label>¿Cuál es tu equipo de bebida? 🍹</label>
+              <div class="segmented-control">
+                <input type="radio" name="drink-team" id="team-fernet" value="Fernet" checked>
+                <label for="team-fernet">Team Fernet</label>
+                
+                <input type="radio" name="drink-team" id="team-champagne" value="Champagne">
+                <label for="team-champagne">Team Champagne</label>
+              </div>
+            </div>
+
+            <div class="form-group checkbox-group">
+              <input type="checkbox" id="input-single" checked>
+              <label for="input-single" class="checkbox-label">
+                Estoy soltero/a (Activar Love Match 💘)
+              </label>
+            </div>
+
+            <button type="submit" class="btn-primary">Ingresar al Evento</button>
+          </form>
+        </div>
+      </section>
+
+      <!-- Lobby/App Screen -->
+      <section id="screen-lobby" class="screen">
+        <div class="lobby-container">
+          <div class="glass-card welcome-card">
+            <h2>¡Hola, <span id="user-display-name">Invitado</span>! 👋</h2>
+            <p>Ya estás conectado a la red interactiva de la fiesta.</p>
+          </div>
+
+          <!-- Active Module Card -->
+          <div id="active-module-card" class="glass-card module-card">
+            <div class="module-header">
+              <span class="module-badge">MÓDULO ACTIVO</span>
+              <h3 id="module-title">Love Match 💘</h3>
+            </div>
+            <div id="module-content" class="module-body">
+              <p>Buscando otros perfiles en el salón...</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Love Match Full Screen (Browsing profiles) -->
+      <section id="screen-match" class="screen">
+        <div class="match-container">
+          <div class="glass-card">
+            <h2>Solteros en el Salón 💘</h2>
+            <p class="subtitle">Deslizá o dale like para buscar coincidencia recíproca.</p>
+            <div id="profile-deck" class="profile-deck">
+              <!-- Profiles will be loaded dynamically -->
+              <p class="no-profiles">No hay otros solteros registrados aún...</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- Global Match Popup Notification -->
+    <div id="match-popup" class="popup-modal hidden">
+      <div class="glass-card match-popup-card">
+        <div class="match-hearts">💖🔥</div>
+        <h2>¡Hiciste Match!</h2>
+        <p>Coincidiste con <span id="match-target-name">Alguien</span></p>
+        <div class="challenge-box">
+          <strong>Reto:</strong>
+          <p id="match-challenge-text">Encontrarse físicamente en la barra y brindar!</p>
+        </div>
+        <button id="btn-close-match-popup" class="btn-primary">¡Acepto el Reto!</button>
+      </div>
+    </div>
+
+    <!-- Live Countdown Alert Modal -->
+    <div id="countdown-modal" class="popup-modal hidden">
+      <div class="glass-card countdown-card">
+        <div class="countdown-timer" id="countdown-timer-display">00:00</div>
+        <h3 id="countdown-title">¡Evento en vivo!</h3>
+        <p id="countdown-message">El animador ha lanzado una consigna.</p>
+      </div>
+    </div>
+
+    <!-- Navigation bar (Visible after onboarding) -->
+    <nav class="app-nav hidden">
+      <button class="nav-btn active" data-screen="lobby">
+        <span class="nav-icon">🏠</span>
+        <span class="nav-label">Lobby</span>
+      </button>
+      <button class="nav-btn" data-screen="match">
+        <span class="nav-icon">💘</span>
+        <span class="nav-label">Love Match</span>
+      </button>
+    </nav>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
