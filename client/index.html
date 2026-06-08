@@ -281,6 +281,73 @@
         </div>
       </section>
 
+      <!-- Misiones Screen -->
+      <section id="screen-misiones" class="screen">
+        <div class="misiones-container">
+          <div class="glass-card misiones-card" style="padding: 24px 20px;">
+            <div class="misiones-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; font-weight: 600;">
+              <div class="misiones-title-badge" style="font-size: 0.85rem; color: var(--accent-gold); font-family: var(--font-title); font-weight: 800; letter-spacing: 0.5px;">MISIONES FLASH 📸</div>
+              <div class="misiones-score" style="font-size: 0.85rem; color: white; background: rgba(255,255,255,0.05); padding: 4px 10px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.05);">Puntos: <span id="misiones-my-score" style="font-weight: 800; color: var(--accent-gold);">0</span></div>
+              <button id="btn-exit-misiones" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.25rem; font-weight: 300; line-height: 1; padding: 4px;">✕</button>
+            </div>
+
+            <!-- Waiting Screen (before misiones start) -->
+            <div id="misiones-waiting" class="misiones-state-section">
+              <div class="misiones-icon" style="font-size: 3.5rem; text-align: center; margin-bottom: 16px;">📸</div>
+              <h3 style="font-family: var(--font-title); text-align: center; font-size: 1.3rem; margin-bottom: 8px; color: var(--accent-gold);">Prepárate para las Misiones Flash</h3>
+              <p style="text-align: center; color: var(--text-secondary); font-size: 0.9rem; line-height: 1.4;">
+                El animador está por lanzar las misiones fotográficas en vivo. ¡El más rápido en subir fotos graciosas ganará puntos para su mesa!
+              </p>
+            </div>
+
+            <!-- Active Mission Screen -->
+            <div id="misiones-active-view" class="misiones-state-section hidden" style="display: flex; flex-direction: column; gap: 16px;">
+              <!-- Mission Card description -->
+              <div style="background: rgba(226, 192, 116, 0.06); border: 1px solid var(--accent-gold); border-radius: 12px; padding: 16px; text-align: center;">
+                <div style="font-size: 0.7rem; text-transform: uppercase; color: var(--accent-gold); font-weight: 800; letter-spacing: 0.5px; margin-bottom: 4px;">Tu Misión Secreta:</div>
+                <h3 id="misiones-active-title" style="font-family: var(--font-title); font-size: 1.25rem; font-weight: 800; color: white; margin-bottom: 6px;">Cargando misión...</h3>
+                <p id="misiones-active-desc" style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.4;">Cargando instrucciones...</p>
+              </div>
+
+              <!-- Camera preview / upload feed -->
+              <div class="misiones-capture-area" style="display: flex; flex-direction: column; align-items: center; gap: 12px;">
+                <div class="misiones-camera-wrapper" style="width: 220px; height: 220px; border-radius: 50%; border: 3px solid var(--accent-gold); overflow: hidden; background: rgba(0,0,0,0.3); display: flex; justify-content: center; align-items: center; position: relative; box-shadow: 0 0 20px rgba(226, 192, 116, 0.25);">
+                  <video id="misiones-video" autoplay playsinline style="width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1);"></video>
+                  <div id="misiones-camera-placeholder" class="misiones-camera-placeholder" style="font-size: 3rem; color: var(--text-secondary);">👤</div>
+                  <img id="misiones-captured-img" class="hidden" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" alt="Captured screen">
+                  <canvas id="misiones-canvas" class="hidden"></canvas>
+                </div>
+
+                <!-- Capture buttons -->
+                <div class="misiones-controls" style="display: flex; gap: 8px; width: 100%; justify-content: center;">
+                  <button type="button" id="btn-misiones-start-camera" class="btn-secondary" style="margin: 0; padding: 10px 16px; font-size: 0.8rem; width: auto; font-family: var(--font-body);">Usar Cámara</button>
+                  <button type="button" id="btn-misiones-snap" class="btn-secondary hidden" style="margin: 0; padding: 10px 16px; font-size: 0.8rem; width: auto; background: var(--accent-gold); color: var(--bg-primary); font-family: var(--font-body);">Capturar Foto</button>
+                  <button type="button" id="btn-misiones-retake" class="btn-secondary hidden" style="margin: 0; padding: 10px 16px; font-size: 0.8rem; width: auto; font-family: var(--font-body);">Tomar Otra</button>
+                  <button type="button" id="btn-misiones-upload" class="btn-secondary" style="margin: 0; padding: 10px 16px; font-size: 0.8rem; width: auto; font-family: var(--font-body);">Subir Archivo</button>
+                  <input type="file" id="input-misiones-file-fallback" accept="image/*" class="hidden">
+                </div>
+              </div>
+
+              <!-- Submit button (Visible after photo is snapped or uploaded) -->
+              <div id="misiones-submit-panel" class="hidden" style="margin-top: 10px;">
+                <button type="button" id="btn-misiones-submit" class="btn-primary" style="margin: 0; width: 100%;">Subir a la Pantalla Gigante 🚀</button>
+              </div>
+            </div>
+
+            <!-- Submission Success Screen -->
+            <div id="misiones-success-view" class="misiones-state-section hidden" style="text-align: center; padding: 20px 0;">
+              <div style="font-size: 4rem; margin-bottom: 16px;">🎉🚀</div>
+              <h3 style="font-family: var(--font-title); font-size: 1.4rem; color: var(--accent-gold); margin-bottom: 8px;">¡Foto Enviada!</h3>
+              <p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.4; margin-bottom: 20px;">
+                Tu foto fue enviada al panel del DJ. Mirá la pantalla gigante para verla en el carrete de fotos del evento. ¡Ganaste 300 puntos!
+              </p>
+              <button type="button" id="btn-misiones-request-new" class="btn-primary" style="margin: 0; width: 100%;">Cumplir Otra Misión 🚀</button>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
 
     </main>
 

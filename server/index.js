@@ -170,6 +170,22 @@ const state = {
     votes: {},     // { [userId]: answerIndex }
     scores: {},    // { [userId]: totalScore }
     tableScores: {} // { [tableNum]: totalScore }
+  },
+  misiones: {
+    active: false,
+    assigned: {},      // { [userId]: misionId }
+    submissions: [],   // [ { submissionId, userId, userName, tableNumber, misionId, misionTitle, photoBase64, timestamp } ]
+    scores: {},        // { [userId]: totalScore }
+    misionesPool: [
+      { id: 0, title: "Zapatos extravagantes 👠", description: "Buscá a alguien que tenga los zapatos más raros o incómodos y sacale una foto." },
+      { id: 1, title: "Selfie Monocromática 🔴", description: "Juntá a 3 personas vestidas con ropa del mismo color y sacate una selfie grupal." },
+      { id: 2, title: "Brindis de 6 copas 🥂", description: "Hagan chocar 6 copas o vasos simultáneamente y capturen el momento exacto." },
+      { id: 3, title: "Mueca grupal de locos 🤪", description: "Captura a tus amigos haciendo las caras más graciosas." },
+      { id: 4, title: "Selfie con el novio/novia 👰🤵", description: "Encontrá a la novia o al novio y sacate una selfie divertida con ellos." },
+      { id: 5, title: "Paso de baile prohibido 🕺", description: "Capturá a alguien tirando unos pasos prohibidos en la pista." },
+      { id: 6, title: "Foto familiar/grupal descontrolada 🤯", description: "Una foto grupal donde todos estén saltando o haciendo gestos graciosos." },
+      { id: 7, title: "El vaso vacío en la barra 🍹", description: "Buscá a alguien que esté pidiendo recarga con el vaso seco y sacale una foto." }
+    ]
   }
 };
 
@@ -446,6 +462,52 @@ const broadcastImpostorState = () => {
   io.emit('admin:impostor_update', getImpostorAdminState());
 };
 
+// Helpers for Misiones Flash
+const getMisionesAdminState = () => {
+  const totalConnected = Object.values(state.users).filter(u => u.connected).length;
+  return {
+    active: state.misiones.active,
+    submissions: state.misiones.submissions,
+    totalPlayers: totalConnected,
+    totalSubmissions: state.misiones.submissions.length
+  };
+};
+
+const getMisionesStateForUser = (userId) => {
+  const user = state.users[userId];
+  if (!user) return null;
+
+  // Assign a mission if not already assigned
+  if (state.misiones.active && state.misiones.assigned[userId] === undefined) {
+    const randomIdx = Math.floor(Math.random() * state.misiones.misionesPool.length);
+    state.misiones.assigned[userId] = randomIdx;
+  }
+
+  const assignedId = state.misiones.assigned[userId];
+  const mision = assignedId !== undefined && assignedId < state.misiones.misionesPool.length
+    ? state.misiones.misionesPool[assignedId]
+    : null;
+
+  const userSubmissions = state.misiones.submissions.filter(sub => sub.userId === userId);
+
+  return {
+    active: state.misiones.active,
+    mision,
+    mySubmissionsCount: userSubmissions.length,
+    myTotalScore: state.misiones.scores[userId] || 0
+  };
+};
+
+const broadcastMisionesState = () => {
+  for (const [socketId, socketInstance] of io.of("/").sockets) {
+    const userId = state.socketToUser[socketId];
+    if (userId) {
+      socketInstance.emit('misiones:state', getMisionesStateForUser(userId));
+    }
+  }
+  io.emit('admin:misiones_update', getMisionesAdminState());
+};
+
 // Helper to generate unique ID
 const generateUserId = () => Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
 
@@ -488,6 +550,7 @@ io.on('connection', (socket) => {
     io.emit('user:list_update', getActiveUserList());
     broadcastTriviaState();
     broadcastImpostorState();
+    broadcastMisionesState();
   });
 
   // Handle user reconnection (Session restoration)
@@ -512,6 +575,7 @@ io.on('connection', (socket) => {
       io.emit('user:list_update', getActiveUserList());
       broadcastTriviaState();
       broadcastImpostorState();
+      broadcastMisionesState();
     } else {
       console.log(`Reconnection failed for ID: ${userId}`);
       socket.emit('user:reconnect_failed');
@@ -885,6 +949,104 @@ io.on('connection', (socket) => {
     }
   });
 
+  // --- Misiones Flash Admin Control ---
+  
+  socket.on('admin:misiones_start', () => {
+    state.misiones.active = true;
+    state.misiones.assigned = {};
+    state.misiones.submissions = [];
+    state.misiones.scores = {};
+    
+    // Initialize scores for all registered users
+    Object.keys(state.users).forEach(uid => {
+      state.misiones.scores[uid] = 0;
+    });
+
+    console.log(`[MISIONES] Game started by Admin.`);
+    broadcastMisionesState();
+  });
+
+  socket.on('admin:misiones_end', () => {
+    state.misiones.active = false;
+    console.log(`[MISIONES] Game ended by Admin.`);
+    broadcastMisionesState();
+  });
+
+  socket.on('admin:misiones_delete_submission', ({ submissionId }) => {
+    const index = state.misiones.submissions.findIndex(sub => sub.submissionId === submissionId);
+    if (index !== -1) {
+      const deleted = state.misiones.submissions.splice(index, 1)[0];
+      console.log(`[MISIONES] Submission ${submissionId} deleted by Admin (User: ${deleted.userName})`);
+      
+      if (state.misiones.scores[deleted.userId]) {
+        state.misiones.scores[deleted.userId] = Math.max(0, state.misiones.scores[deleted.userId] - 300);
+      }
+      
+      broadcastMisionesState();
+    }
+  });
+
+  socket.on('admin:request_misiones_sync', () => {
+    socket.emit('admin:misiones_update', getMisionesAdminState());
+  });
+
+  // --- Misiones Flash Client Events ---
+
+  socket.on('misiones:submit_photo', ({ misionId, photoBase64 }) => {
+    const userId = state.socketToUser[socket.id];
+    if (!userId) return;
+
+    const user = state.users[userId];
+    if (!user) return;
+
+    if (!state.misiones.active) return;
+
+    const mision = state.misiones.misionesPool.find(m => m.id === misionId);
+    if (!mision) return;
+
+    const submissionId = Math.random().toString(36).substring(2, 9);
+    const submission = {
+      submissionId,
+      userId,
+      userName: user.name,
+      tableNumber: user.tableNumber || "-",
+      misionId,
+      misionTitle: mision.title,
+      photoBase64,
+      timestamp: new Date()
+    };
+
+    state.misiones.submissions.push(submission);
+    state.misiones.scores[userId] = (state.misiones.scores[userId] || 0) + 300;
+
+    console.log(`[MISIONES] Photo submitted by "${user.name}" (Table ${user.tableNumber}) for Mission ${misionId}. Awarded 300 pts.`);
+    broadcastMisionesState();
+  });
+
+  socket.on('misiones:request_new', () => {
+    const userId = state.socketToUser[socket.id];
+    if (userId) {
+      const currentAssigned = state.misiones.assigned[userId];
+      let newIdx = currentAssigned;
+      
+      if (state.misiones.misionesPool.length > 1) {
+        while (newIdx === currentAssigned) {
+          newIdx = Math.floor(Math.random() * state.misiones.misionesPool.length);
+        }
+      }
+      
+      state.misiones.assigned[userId] = newIdx;
+      broadcastMisionesState();
+    }
+  });
+
+  socket.on('misiones:request_sync', () => {
+    const userId = state.socketToUser[socket.id];
+    if (userId) {
+      socket.emit('misiones:state', getMisionesStateForUser(userId));
+    }
+  });
+
   // Admin Module Control
   socket.on('admin:activate_module', (moduleName) => {
     if (state.modules[moduleName]) {
@@ -905,6 +1067,9 @@ io.on('connection', (socket) => {
       }
       if (moduleName === 'impostorMusical') {
         broadcastImpostorState();
+      }
+      if (moduleName === 'misionesFlash') {
+        broadcastMisionesState();
       }
     }
   });
@@ -957,6 +1122,15 @@ io.on('connection', (socket) => {
       tableScores: {}
     };
 
+    // Reset Misiones state
+    state.misiones = {
+      active: false,
+      assigned: {},
+      submissions: [],
+      scores: {},
+      misionesPool: state.misiones.misionesPool
+    };
+
     // Notify all clients to clear local cache and return to onboarding
     io.emit('admin:reset_forced');
     
@@ -968,6 +1142,7 @@ io.on('connection', (socket) => {
     io.emit('user:list_update', []);
     broadcastTriviaState();
     broadcastImpostorState();
+    broadcastMisionesState();
   });
 
   // Handle disconnection

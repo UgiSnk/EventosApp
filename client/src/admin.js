@@ -576,3 +576,148 @@ socket.on("impostor:game_over", (data) => {
   // Show Podium modal
   adminPodiumModal.classList.remove("hidden");
 });
+
+/* --- Timed Misiones Control Panel --- */
+
+// DOM Elements
+const adminMisionesCard = document.getElementById("admin-misiones-card");
+const adminMisionesNotStarted = document.getElementById("admin-misiones-not-started");
+const adminMisionesActive = document.getElementById("admin-misiones-active");
+const btnAdminMisionesStart = document.getElementById("btn-admin-misiones-start");
+const btnAdminMisionesEnd = document.getElementById("btn-admin-misiones-end");
+const btnAdminMisionesProject = document.getElementById("btn-admin-misiones-project");
+const adminMisionesCount = document.getElementById("admin-misiones-count");
+const adminMisionesTotalPlayers = document.getElementById("admin-misiones-total-players");
+const adminMisionesGallery = document.getElementById("admin-misiones-gallery");
+
+// Projection Modal DOM elements
+const adminProjectionModal = document.getElementById("admin-projection-modal");
+const btnCloseProjection = document.getElementById("btn-close-projection");
+const projectionEmptyState = document.getElementById("projection-empty-state");
+const projectionSlideContent = document.getElementById("projection-slide-content");
+const projectionImg = document.getElementById("projection-img");
+const projectionMisionTitle = document.getElementById("projection-mision-title");
+const projectionAuthor = document.getElementById("projection-author");
+
+// Module sync listener
+socket.on("state:sync", (data) => {
+  if (data.activeModule === "misionesFlash") {
+    adminMisionesCard.classList.remove("hidden");
+    socket.emit("admin:request_misiones_sync");
+  } else {
+    adminMisionesCard.classList.add("hidden");
+  }
+});
+
+// Bind Admin buttons
+btnAdminMisionesStart.addEventListener("click", () => {
+  socket.emit("admin:misiones_start");
+});
+
+btnAdminMisionesEnd.addEventListener("click", () => {
+  if (confirm("¿Estás seguro de que querés finalizar las misiones?")) {
+    socket.emit("admin:misiones_end");
+  }
+});
+
+// Slideshow state
+let slideshowInterval = null;
+let slideshowIndex = 0;
+let currentSubmissionsList = [];
+
+const startSlideshow = () => {
+  clearInterval(slideshowInterval);
+  
+  const cycle = () => {
+    if (currentSubmissionsList.length === 0) {
+      projectionEmptyState.classList.remove("hidden");
+      projectionSlideContent.classList.add("hidden");
+    } else {
+      projectionEmptyState.classList.add("hidden");
+      projectionSlideContent.classList.remove("hidden");
+      
+      if (slideshowIndex >= currentSubmissionsList.length) {
+        slideshowIndex = 0;
+      }
+      
+      const sub = currentSubmissionsList[slideshowIndex];
+      
+      // Add transition opacity fade
+      projectionSlideContent.style.transition = "opacity 0.3s ease";
+      projectionSlideContent.style.opacity = 0;
+      setTimeout(() => {
+        projectionImg.src = sub.photoBase64;
+        projectionMisionTitle.textContent = `🎯 Misión: ${sub.misionTitle}`;
+        projectionAuthor.innerHTML = `Subido por <span style="color: var(--accent-gold); font-weight: 800;">${sub.userName}</span> (Mesa ${sub.tableNumber})`;
+        projectionSlideContent.style.opacity = 1;
+      }, 300);
+      
+      slideshowIndex++;
+    }
+  };
+  
+  cycle();
+  slideshowInterval = setInterval(cycle, 4000);
+};
+
+btnAdminMisionesProject.addEventListener("click", () => {
+  adminProjectionModal.classList.remove("hidden");
+  startSlideshow();
+});
+
+btnCloseProjection.addEventListener("click", () => {
+  adminProjectionModal.classList.add("hidden");
+  clearInterval(slideshowInterval);
+});
+
+// Receive updates
+socket.on("admin:misiones_update", (data) => {
+  console.log("Admin Misiones update received:", data);
+  
+  if (!data.active) {
+    adminMisionesCard.classList.add("hidden");
+    return;
+  }
+  
+  adminMisionesCard.classList.remove("hidden");
+  adminMisionesNotStarted.classList.add("hidden");
+  adminMisionesActive.classList.remove("hidden");
+  
+  adminMisionesCount.textContent = data.totalSubmissions;
+  adminMisionesTotalPlayers.textContent = data.totalPlayers;
+  
+  currentSubmissionsList = data.submissions || [];
+  
+  // Fill moderation gallery
+  adminMisionesGallery.innerHTML = "";
+  if (currentSubmissionsList.length === 0) {
+    adminMisionesGallery.innerHTML = '<p style="font-size: 0.75rem; color: var(--text-secondary); font-style: italic; text-align: center; padding: 10px 0;">No se subieron fotos todavía...</p>';
+  } else {
+    // Show newest photos first in moderation gallery
+    [...currentSubmissionsList].reverse().forEach(sub => {
+      const item = document.createElement("div");
+      item.style = "display: flex; gap: 10px; align-items: center; justify-content: space-between; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04); border-radius: 8px; padding: 8px;";
+      
+      item.innerHTML = `
+        <div style="display: flex; gap: 10px; align-items: center; max-width: 70%; overflow: hidden;">
+          <img src="${sub.photoBase64}" style="width: 50px; height: 50px; border-radius: 6px; object-fit: cover; border: 1px solid rgba(255,255,255,0.1);" alt="Preview">
+          <div style="display: flex; flex-direction: column; font-size: 0.75rem; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+            <span style="font-weight: 600; color: white;">${sub.userName} (Mesa ${sub.tableNumber})</span>
+            <span style="color: var(--accent-gold); font-size: 0.7rem;">${sub.misionTitle}</span>
+          </div>
+        </div>
+        <button class="btn-danger btn-delete-photo" data-id="${sub.submissionId}" style="margin: 0; padding: 6px 12px; font-size: 0.7rem; border-radius: 6px; width: auto; font-family: var(--font-body);">Eliminar 🗑️</button>
+      `;
+      
+      // Bind delete button
+      item.querySelector(".btn-delete-photo").addEventListener("click", () => {
+        if (confirm(`¿Eliminar foto de ${sub.userName}?`)) {
+          socket.emit("admin:misiones_delete_submission", { submissionId: sub.submissionId });
+        }
+      });
+      
+      adminMisionesGallery.appendChild(item);
+    });
+  }
+});
+

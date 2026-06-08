@@ -793,6 +793,8 @@ socket.on("admin:reset_forced", () => {
   countdownModal.classList.add("hidden");
   clearInterval(countdownInterval);
   clearInterval(triviaTimerInterval);
+  clearInterval(impostorTimerInterval);
+  if (typeof stopMisionesCamera === "function") stopMisionesCamera();
   
   alert("El evento se ha cerrado o reiniciado. Tu sesión efímera ha expirado.");
 });
@@ -1364,6 +1366,239 @@ socket.on("impostor:game_over", (data) => {
       `;
       impostorClientLeaderboard.appendChild(row);
     });
+  }
+});
+
+/* --- Timed Misiones Client Module --- */
+
+// DOM Elements
+const screenMisiones = document.getElementById("screen-misiones");
+const btnExitMisiones = document.getElementById("btn-exit-misiones");
+const misionesMyScore = document.getElementById("misiones-my-score");
+const misionesWaiting = document.getElementById("misiones-waiting");
+const misionesActiveView = document.getElementById("misiones-active-view");
+const misionesActiveTitle = document.getElementById("misiones-active-title");
+const misionesActiveDesc = document.getElementById("misiones-active-desc");
+const misionesVideo = document.getElementById("misiones-video");
+const misionesCameraPlaceholder = document.getElementById("misiones-camera-placeholder");
+const misionesCapturedImg = document.getElementById("misiones-captured-img");
+const misionesCanvas = document.getElementById("misiones-canvas");
+const btnMisionesStartCamera = document.getElementById("btn-misiones-start-camera");
+const btnMisionesSnap = document.getElementById("btn-misiones-snap");
+const btnMisionesRetake = document.getElementById("btn-misiones-retake");
+const btnMisionesUpload = document.getElementById("btn-misiones-upload");
+const inputMisionesFileFallback = document.getElementById("input-misiones-file-fallback");
+const misionesSubmitPanel = document.getElementById("misiones-submit-panel");
+const btnMisionesSubmit = document.getElementById("btn-misiones-submit");
+const misionesSuccessView = document.getElementById("misiones-success-view");
+const btnMisionesRequestNew = document.getElementById("btn-misiones-request-new");
+
+let misionesStream = null;
+let misionesPhotoBase64 = null;
+let activeMisionId = null;
+
+// Exit Misiones button handler
+btnExitMisiones.addEventListener("click", () => {
+  stopMisionesCamera();
+  screenMisiones.classList.remove("active");
+  lobbyScreen.classList.add("active");
+  
+  navButtons.forEach(btn => {
+    if (btn.getAttribute("data-screen") === "lobby") {
+      btn.classList.add("active");
+    } else {
+      btn.classList.remove("active");
+    }
+  });
+});
+
+// Camera control helper
+async function startMisionesCamera() {
+  try {
+    misionesStream = await navigator.mediaDevices.getUserMedia({
+      video: { 
+        facingMode: "user",
+        width: { ideal: 400 },
+        height: { ideal: 400 }
+      },
+      audio: false
+    });
+    
+    misionesVideo.srcObject = misionesStream;
+    misionesVideo.classList.remove("hidden");
+    misionesCameraPlaceholder.classList.add("hidden");
+    misionesCapturedImg.classList.add("hidden");
+    
+    btnMisionesStartCamera.classList.add("hidden");
+    btnMisionesSnap.classList.remove("hidden");
+    btnMisionesUpload.classList.add("hidden");
+  } catch (err) {
+    console.error("Camera access error (Misiones):", err);
+    alert("No se pudo abrir la cámara. Podés subir un archivo directamente.");
+    inputMisionesFileFallback.click();
+  }
+}
+
+function stopMisionesCamera() {
+  if (misionesStream) {
+    misionesStream.getTracks().forEach(track => track.stop());
+    misionesStream = null;
+  }
+}
+
+function snapMisionesPhoto() {
+  if (!misionesStream) return;
+  
+  const width = 300;
+  const height = 300;
+  misionesCanvas.width = width;
+  misionesCanvas.height = height;
+  
+  const ctx = misionesCanvas.getContext("2d");
+  
+  // Mirror canvas context
+  ctx.translate(width, 0);
+  ctx.scale(-1, 1);
+  
+  // Draw current frame
+  ctx.drawImage(misionesVideo, 0, 0, width, height);
+  
+  // Compress to Base64 JPEG (0.6 quality)
+  misionesPhotoBase64 = misionesCanvas.toDataURL("image/jpeg", 0.6);
+  
+  stopMisionesCamera();
+  
+  // Update previews
+  misionesCapturedImg.src = misionesPhotoBase64;
+  misionesCapturedImg.classList.remove("hidden");
+  misionesVideo.classList.add("hidden");
+  
+  btnMisionesSnap.classList.add("hidden");
+  btnMisionesRetake.classList.remove("hidden");
+  btnMisionesUpload.classList.remove("hidden");
+  misionesSubmitPanel.classList.remove("hidden");
+}
+
+function retakeMisionesPhoto() {
+  misionesPhotoBase64 = null;
+  misionesCapturedImg.classList.add("hidden");
+  misionesCameraPlaceholder.classList.remove("hidden");
+  
+  btnMisionesRetake.classList.add("hidden");
+  btnMisionesStartCamera.classList.remove("hidden");
+  btnMisionesUpload.classList.remove("hidden");
+  misionesSubmitPanel.classList.add("hidden");
+}
+
+// Binds
+btnMisionesStartCamera.addEventListener("click", startMisionesCamera);
+btnMisionesSnap.addEventListener("click", snapMisionesPhoto);
+btnMisionesRetake.addEventListener("click", retakeMisionesPhoto);
+
+btnMisionesUpload.addEventListener("click", () => {
+  inputMisionesFileFallback.click();
+});
+
+inputMisionesFileFallback.addEventListener("change", (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  
+  const reader = new FileReader();
+  reader.onload = (event) => {
+    const img = new Image();
+    img.onload = () => {
+      const width = 300;
+      const height = 300;
+      misionesCanvas.width = width;
+      misionesCanvas.height = height;
+      const ctx = misionesCanvas.getContext("2d");
+      
+      const minDim = Math.min(img.width, img.height);
+      const sx = (img.width - minDim) / 2;
+      const sy = (img.height - minDim) / 2;
+      ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, width, height);
+      
+      misionesPhotoBase64 = misionesCanvas.toDataURL("image/jpeg", 0.6);
+      
+      misionesCapturedImg.src = misionesPhotoBase64;
+      misionesCapturedImg.classList.remove("hidden");
+      misionesCameraPlaceholder.classList.add("hidden");
+      misionesVideo.classList.add("hidden");
+      
+      btnMisionesStartCamera.classList.add("hidden");
+      btnMisionesSnap.classList.add("hidden");
+      btnMisionesRetake.classList.remove("hidden");
+      misionesSubmitPanel.classList.remove("hidden");
+    };
+    img.src = event.target.result;
+  };
+  reader.readAsDataURL(file);
+});
+
+// Submit photo
+btnMisionesSubmit.addEventListener("click", () => {
+  if (activeMisionId !== null && misionesPhotoBase64) {
+    socket.emit("misiones:submit_photo", {
+      misionId: activeMisionId,
+      photoBase64: misionesPhotoBase64
+    });
+    
+    // Switch views to success
+    misionesActiveView.classList.add("hidden");
+    misionesSuccessView.classList.remove("hidden");
+    stopMisionesCamera();
+  }
+});
+
+// Request new mission
+btnMisionesRequestNew.addEventListener("click", () => {
+  socket.emit("misiones:request_new");
+  
+  // Clear preview and return to photo capture view
+  misionesPhotoBase64 = null;
+  misionesCapturedImg.classList.add("hidden");
+  misionesCameraPlaceholder.classList.remove("hidden");
+  misionesVideo.classList.add("hidden");
+  
+  btnMisionesRetake.classList.add("hidden");
+  btnMisionesStartCamera.classList.remove("hidden");
+  btnMisionesUpload.classList.remove("hidden");
+  misionesSubmitPanel.classList.add("hidden");
+  
+  misionesSuccessView.classList.add("hidden");
+  misionesActiveView.classList.remove("hidden");
+});
+
+// Socket state sync
+socket.on("misiones:state", (data) => {
+  console.log("Client Misiones state updated:", data);
+  if (!currentUser) return;
+  
+  misionesMyScore.textContent = data.myTotalScore;
+  
+  if (!data.active) {
+    if (screenMisiones.classList.contains("active")) {
+      btnExitMisiones.click();
+    }
+    stopMisionesCamera();
+    return;
+  }
+  
+  // Populate active mission details
+  if (data.mision) {
+    activeMisionId = data.mision.id;
+    misionesActiveTitle.textContent = data.mision.title;
+    misionesActiveDesc.textContent = data.mision.description;
+    
+    misionesWaiting.classList.add("hidden");
+    // Show active view only if we are not currently displaying success view
+    if (misionesSuccessView.classList.contains("hidden")) {
+      misionesActiveView.classList.remove("hidden");
+    }
+  } else {
+    misionesWaiting.classList.remove("hidden");
+    misionesActiveView.classList.add("hidden");
+    misionesSuccessView.classList.add("hidden");
   }
 });
 

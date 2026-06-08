@@ -349,6 +349,44 @@
             </div>
           </div>
 
+          <!-- Misiones Flash control panel (Visible only when misiones module is active) -->
+          <div id="admin-misiones-card" class="glass-card hidden" style="margin-bottom: 20px;">
+            <h3 style="font-family: var(--font-title); margin-bottom: 12px; color: var(--accent-gold);">📸 Control Misiones Flash</h3>
+            
+            <!-- Not started state -->
+            <div id="admin-misiones-not-started">
+              <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 14px; line-height: 1.4;">
+                Las Misiones Flash desafían a los invitados a tomar fotos divertidas en vivo. Podés proyectar las fotos en la pantalla gigante.
+              </p>
+              <button id="btn-admin-misiones-start" class="btn-primary" style="margin-top: 0; width: 100%;">Iniciar Misiones 🚀</button>
+            </div>
+            
+            <!-- Active state -->
+            <div id="admin-misiones-active" class="hidden">
+              <div class="misiones-stats-summary" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; text-align: center;">
+                <div style="background: rgba(255, 255, 255, 0.02); padding: 8px 4px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.03);">
+                  <div id="admin-misiones-count" style="font-size: 1.3rem; font-weight: 800; color: var(--accent-gold);">0</div>
+                  <div style="font-size: 0.6rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.3px;">Fotos Subidas</div>
+                </div>
+                <div style="background: rgba(255, 255, 255, 0.02); padding: 8px 4px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.03);">
+                  <div id="admin-misiones-total-players" style="font-size: 1.3rem; font-weight: 800; color: white;">0</div>
+                  <div style="font-size: 0.6rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.3px;">Jugadores</div>
+                </div>
+              </div>
+
+              <!-- Button to trigger slideshow projection -->
+              <button id="btn-admin-misiones-project" class="btn-primary" style="margin-top: 0; margin-bottom: 16px; width: 100%; background: linear-gradient(90deg, var(--accent-gold) 0%, var(--accent-purple) 100%);">Proyectar Carrete 📽️</button>
+
+              <!-- Moderation Gallery -->
+              <h4 style="font-size: 0.8rem; text-transform: uppercase; color: var(--accent-gold); margin-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 4px;">Galería de Moderación (Fotos Subidas)</h4>
+              <div id="admin-misiones-gallery" style="display: flex; flex-direction: column; gap: 10px; max-height: 250px; overflow-y: auto; padding-right: 4px;">
+                <!-- List of photo submissions with Delete buttons filled dynamically -->
+              </div>
+              
+              <button id="btn-admin-misiones-end" class="btn-danger" style="margin-top: 14px; width: 100%;">Finalizar Misiones 🛑</button>
+            </div>
+          </div>
+
           <!-- Danger Zone Reset (Ephemeral Day Reset) -->
           <div class="glass-card danger-zone">
             <h3 style="font-family: var(--font-title); margin-bottom: 8px;">Zona de Peligro</h3>
@@ -460,6 +498,33 @@
       </div>
       
       <button id="btn-close-podium" class="btn-primary" style="margin-top: 15px; width: 100%;">Cerrar Podio</button>
+    </div>
+  </div>
+
+  <!-- Full-screen Projection Slideshow Modal -->
+  <div id="admin-projection-modal" class="popup-modal hidden" style="background: rgba(4, 2, 8, 0.98); z-index: 200;">
+    <div style="position: absolute; top: 20px; right: 20px; z-index: 210;">
+      <button id="btn-close-projection" style="background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.1); border-radius: 50%; color: white; width: 44px; height: 44px; font-size: 1.5rem; cursor: pointer; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(10px);">✕</button>
+    </div>
+    
+    <div id="projection-slide-container" style="display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; height: 100%; max-width: 800px; margin: 0 auto; padding: 20px; text-align: center; color: white;">
+      <!-- No submissions placeholder -->
+      <div id="projection-empty-state" style="font-family: var(--font-title);">
+        <div style="font-size: 5rem; margin-bottom: 20px;">📸</div>
+        <h2 style="font-size: 2.2rem; color: var(--accent-gold); font-weight: 800; margin-bottom: 10px;">Carrete del Evento en Vivo</h2>
+        <p style="color: var(--text-secondary); font-size: 1.2rem;">¡Esperando las primeras fotos de los invitados! Suban sus fotos escaneando el código QR.</p>
+      </div>
+
+      <!-- Slide content -->
+      <div id="projection-slide-content" class="hidden" style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; width: 100%; gap: 15px;">
+        <div style="position: relative; border-radius: 20px; padding: 8px; background: linear-gradient(135deg, var(--accent-gold) 0%, var(--accent-purple) 100%); box-shadow: 0 0 40px rgba(138, 43, 226, 0.35); max-height: 70%; display: flex; justify-content: center; align-items: center;">
+          <img id="projection-img" src="" style="max-width: 100%; max-height: 50vh; border-radius: 14px; object-fit: contain; display: block;" alt="Foto del evento">
+        </div>
+        <div style="margin-top: 10px;">
+          <h3 id="projection-mision-title" style="font-family: var(--font-title); font-size: 1.8rem; color: var(--accent-gold); font-weight: 800; text-shadow: 0 0 10px rgba(226, 192, 116, 0.2);">Misión</h3>
+          <p id="projection-author" style="font-size: 1.3rem; margin-top: 4px; font-weight: 600; color: white;">Subido por Romeo (Mesa 3)</p>
+        </div>
+      </div>
     </div>
   </div>
 
