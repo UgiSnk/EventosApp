@@ -478,3 +478,39 @@ function updateTimerDisplay(seconds) {
   countdownTimerDisplay.textContent = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 }
 
+/* --- Global Reset Forced Event --- */
+socket.on("admin:reset_forced", () => {
+  console.log("Server triggered global event reset. Wiping local state.");
+  
+  // Clear persistent cache
+  localStorage.removeItem("eventos_user_id");
+  
+  // Reset memory state
+  currentUser = null;
+  avatarBase64 = null;
+  stopCamera();
+  
+  // Reset form inputs & camera UI previews
+  formOnboarding.reset();
+  selfieImg.classList.add("hidden");
+  selfieImg.src = "";
+  selfieVideo.classList.add("hidden");
+  selfiePlaceholder.classList.remove("hidden");
+  btnStartCamera.classList.remove("hidden");
+  btnSnap.classList.add("hidden");
+  btnRetake.classList.add("hidden");
+  btnUpload.classList.remove("hidden");
+  
+  // Transition back to onboarding screen
+  document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+  onboardingScreen.classList.add("active");
+  appNav.classList.add("hidden");
+  
+  // Close any open modals
+  matchPopup.classList.add("hidden");
+  countdownModal.classList.add("hidden");
+  clearInterval(countdownInterval);
+  
+  alert("El evento se ha cerrado o reiniciado. Tu sesión efímera ha expirado.");
+});
+

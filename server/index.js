@@ -169,6 +169,33 @@ io.on('connection', (socket) => {
     io.emit('admin:countdown', data);
   });
 
+  // Admin Event Reset (Clear memory back to zero)
+  socket.on('admin:reset_event', () => {
+    console.log(`[ADMIN] Resetting event... Clearing all active user sessions!`);
+    
+    // Clear timeouts first to prevent delayed log updates
+    Object.values(state.users).forEach(user => {
+      if (user.disconnectTimeout) clearTimeout(user.disconnectTimeout);
+    });
+
+    state.users = {};
+    state.socketToUser = {};
+    state.activeModule = 'loveMatch';
+    Object.keys(state.modules).forEach((key) => {
+      state.modules[key].active = (key === 'loveMatch');
+    });
+
+    // Notify all clients to clear local cache and return to onboarding
+    io.emit('admin:reset_forced');
+    
+    // Broadcast updates
+    io.emit('state:sync', {
+      activeModule: state.activeModule,
+      modules: state.modules
+    });
+    io.emit('user:list_update', []);
+  });
+
   // Handle disconnection
   socket.on('disconnect', () => {
     const userId = state.socketToUser[socket.id];
