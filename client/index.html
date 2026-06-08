@@ -34,6 +34,26 @@
             </div>
 
             <div class="form-group">
+              <label>Tu Foto de Perfil 📸</label>
+              <div class="selfie-capture-container">
+                <video id="selfie-video" autoplay playsinline class="hidden"></video>
+                <div id="selfie-placeholder" class="selfie-placeholder">
+                  <span class="placeholder-icon">👤</span>
+                  <span class="placeholder-text">Cámara o archivo</span>
+                </div>
+                <img id="selfie-img" class="hidden" alt="Selfie de perfil">
+                <canvas id="selfie-canvas" class="hidden"></canvas>
+              </div>
+              <div class="selfie-controls">
+                <button type="button" id="btn-start-camera" class="btn-secondary">Usar Cámara</button>
+                <button type="button" id="btn-snap" class="btn-secondary hidden">Tomar Foto</button>
+                <button type="button" id="btn-retake" class="btn-secondary hidden">Tomar Otra</button>
+                <button type="button" id="btn-upload" class="btn-secondary">Subir Foto</button>
+                <input type="file" id="input-file-fallback" accept="image/*" class="hidden">
+              </div>
+            </div>
+
+            <div class="form-group">
               <label>¿Cuál es tu equipo de bebida? 🍹</label>
               <div class="segmented-control">
                 <input type="radio" name="drink-team" id="team-fernet" value="Fernet" checked>
@@ -98,6 +118,13 @@
       <div class="glass-card match-popup-card">
         <div class="match-hearts">💖🔥</div>
         <h2>¡Hiciste Match!</h2>
+        <div class="match-avatar-container">
+          <div id="match-my-avatar-box" class="profile-avatar-placeholder">M</div>
+          <img id="match-my-avatar" class="match-avatar hidden" src="" alt="Mi foto">
+          <div class="match-heart-divider" style="font-size: 2rem; display: flex; align-items: center; justify-content: center; color: var(--accent-pink);">⚡</div>
+          <div id="match-their-avatar-box" class="profile-avatar-placeholder">T</div>
+          <img id="match-their-avatar" class="match-avatar hidden" src="" alt="Su foto">
+        </div>
         <p>Coincidiste con <span id="match-target-name">Alguien</span></p>
         <div class="challenge-box">
           <strong>Reto:</strong>

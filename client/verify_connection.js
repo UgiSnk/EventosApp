@@ -1,41 +1,62 @@
 import { io } from "socket.io-client";
 
-console.log("Starting connection test to http://localhost:3000...");
-const socket = io("http://localhost:3000");
+console.log("Starting full registration and reconnection test...");
+let socket = io("http://localhost:3000");
 
 let timeout = setTimeout(() => {
-  console.error("Test timed out! Could not connect to socket server.");
+  console.error("❌ Test timed out! Reconnection failed.");
   socket.disconnect();
   process.exit(1);
-}, 5000);
+}, 8000);
+
+let savedUserId = null;
 
 socket.on("connect", () => {
-  console.log("✅ Successfully connected to the WebSocket server!");
+  console.log("✅ Socket connected!");
 });
 
 socket.on("state:sync", (data) => {
-  console.log("✅ Received sync state from server:", data);
-  
-  // Try registering a test user
-  console.log("Emitting user:register for 'Test User'...");
-  socket.emit("user:register", {
-    name: "Test User",
-    isSingle: true,
-    segmentAnswers: { drinkTeam: "Fernet" }
-  });
+  if (!savedUserId) {
+    console.log("Step 1: Registering new user...");
+    socket.emit("user:register", {
+      name: "Test User Reconnect",
+      isSingle: true,
+      segmentAnswers: { drinkTeam: "Fernet" }
+    });
+  }
 });
 
 socket.on("user:registered", (user) => {
-  console.log("✅ Server successfully registered the test user:", user);
-  clearTimeout(timeout);
+  console.log("✅ User registered successfully. Received ID:", user.userId);
+  savedUserId = user.userId;
+  
+  // Step 2: Simulate disconnect
+  console.log("Step 2: Simulating client disconnect...");
   socket.disconnect();
-  console.log("Test completed successfully!");
-  process.exit(0);
-});
-
-socket.on("connect_error", (err) => {
-  console.error("❌ Connection error:", err.message);
-  clearTimeout(timeout);
-  socket.disconnect();
-  process.exit(1);
+  
+  // Wait a moment, then connect again and try reconnecting
+  setTimeout(() => {
+    console.log("Step 3: Creating new socket and reconnecting...");
+    socket = io("http://localhost:3000");
+    
+    socket.on("connect", () => {
+      console.log("✅ New socket connected. Restoring session...");
+      socket.emit("user:reconnect", { userId: savedUserId });
+    });
+    
+    socket.on("user:reconnected", (reconnectedUser) => {
+      console.log("✅ Session restored successfully! Profile Name:", reconnectedUser.name);
+      clearTimeout(timeout);
+      socket.disconnect();
+      console.log("🎉 Reconnection test completed successfully!");
+      process.exit(0);
+    });
+    
+    socket.on("user:reconnect_failed", () => {
+      console.error("❌ Session restore failed on server!");
+      clearTimeout(timeout);
+      socket.disconnect();
+      process.exit(1);
+    });
+  }, 1000);
 });

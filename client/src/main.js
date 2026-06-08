@@ -12,37 +12,99 @@ const socket = io(SOCKET_URL);
 let currentUser = null;
 let activeModule = 'loveMatch';
 let modulesState = {};
+let stream = null;
+let avatarBase64 = null; // Holds the compressed base64 image data
 
-// DOM Elements
+// DOM Elements - Navigation and Screens
 const statusBadge = document.getElementById("connection-status");
 const onboardingScreen = document.getElementById("screen-onboarding");
 const lobbyScreen = document.getElementById("screen-lobby");
 const matchScreen = document.getElementById("screen-match");
 const appNav = document.querySelector(".app-nav");
+
+// DOM Elements - Onboarding Form
 const formOnboarding = document.getElementById("form-onboarding");
 const inputName = document.getElementById("input-name");
 const inputSingle = document.getElementById("input-single");
 const userDisplayName = document.getElementById("user-display-name");
+
+// DOM Elements - Camera
+const btnStartCamera = document.getElementById("btn-start-camera");
+const btnSnap = document.getElementById("btn-snap");
+const btnRetake = document.getElementById("btn-retake");
+const btnUpload = document.getElementById("btn-upload");
+const inputFileFallback = document.getElementById("input-file-fallback");
+const selfieVideo = document.getElementById("selfie-video");
+const selfiePlaceholder = document.getElementById("selfie-placeholder");
+const selfieImg = document.getElementById("selfie-img");
+const selfieCanvas = document.getElementById("selfie-canvas");
+
+// DOM Elements - Lobby & Modules
 const activeModuleTitle = document.getElementById("module-title");
 const activeModuleContent = document.getElementById("module-content");
 const profileDeck = document.getElementById("profile-deck");
 const navButtons = document.querySelectorAll(".nav-btn");
 
-// Modals DOM
+// DOM Elements - Modals
 const matchPopup = document.getElementById("match-popup");
 const matchTargetName = document.getElementById("match-target-name");
 const matchChallengeText = document.getElementById("match-challenge-text");
 const btnCloseMatchPopup = document.getElementById("btn-close-match-popup");
+const matchMyAvatar = document.getElementById("match-my-avatar");
+const matchMyAvatarBox = document.getElementById("match-my-avatar-box");
+const matchTheirAvatar = document.getElementById("match-their-avatar");
+const matchTheirAvatarBox = document.getElementById("match-their-avatar-box");
 
 const countdownModal = document.getElementById("countdown-modal");
 const countdownTimerDisplay = document.getElementById("countdown-timer-display");
 const countdownTitle = document.getElementById("countdown-title");
 const countdownMessage = document.getElementById("countdown-message");
 
-/* --- Socket Connection Handlers --- */
-socket.on("connect", () => {
+/* --- Session Restoration (Persistence) --- */
+const savedUserId = localStorage.getItem("eventos_user_id");
+if (savedUserId) {
+  statusBadge.textContent = "Restaurando...";
+  statusBadge.className = "status-badge disconnected";
+  socket.emit("user:reconnect", { userId: savedUserId });
+}
+
+socket.on("user:reconnected", (user) => {
+  currentUser = user;
+  userDisplayName.textContent = user.name;
+  
+  // Transition screens
+  onboardingScreen.classList.remove("active");
+  lobbyScreen.classList.add("active");
+  appNav.classList.remove("hidden");
+  
+  if (!user.isSingle) {
+    const matchNavBtn = document.querySelector('[data-screen="match"]');
+    if (matchNavBtn) matchNavBtn.style.display = 'none';
+  }
+  
   statusBadge.textContent = "Conectado";
   statusBadge.className = "status-badge connected";
+  console.log("Session restored:", user);
+  
+  if (currentUser.isSingle) {
+    socket.emit("love:get_profiles");
+  }
+});
+
+socket.on("user:reconnect_failed", () => {
+  console.log("Session restore failed, clearing local storage.");
+  localStorage.removeItem("eventos_user_id");
+  statusBadge.textContent = "Conectado";
+  statusBadge.className = "status-badge connected";
+  onboardingScreen.classList.add("active");
+});
+
+/* --- Socket Connection Handlers --- */
+socket.on("connect", () => {
+  if (!savedUserId) {
+    statusBadge.textContent = "Conectado";
+    statusBadge.className = "status-badge connected";
+  }
   console.log("Connected to server");
 });
 
@@ -50,6 +112,130 @@ socket.on("disconnect", () => {
   statusBadge.textContent = "Desconectado";
   statusBadge.className = "status-badge disconnected";
   console.log("Disconnected from server");
+});
+
+/* --- Camera Capture Logic --- */
+btnStartCamera.addEventListener("click", startCamera);
+btnSnap.addEventListener("click", snapPhoto);
+btnRetake.addEventListener("click", retakePhoto);
+
+async function startCamera() {
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { 
+        facingMode: "user",
+        width: { ideal: 400 },
+        height: { ideal: 400 }
+      },
+      audio: false
+    });
+    
+    selfieVideo.srcObject = stream;
+    selfieVideo.classList.remove("hidden");
+    selfiePlaceholder.classList.add("hidden");
+    selfieImg.classList.add("hidden");
+    
+    btnStartCamera.classList.add("hidden");
+    btnSnap.classList.remove("hidden");
+    btnUpload.classList.add("hidden");
+  } catch (err) {
+    console.error("Camera access error:", err);
+    alert("No se pudo abrir la cámara. Podés subir un archivo directamente.");
+    inputFileFallback.click();
+  }
+}
+
+function snapPhoto() {
+  if (!stream) return;
+  
+  const width = 300;
+  const height = 300;
+  selfieCanvas.width = width;
+  selfieCanvas.height = height;
+  
+  const ctx = selfieCanvas.getContext("2d");
+  
+  // Mirror canvas context horizontally to match mirrored video feed
+  ctx.translate(width, 0);
+  ctx.scale(-1, 1);
+  
+  // Draw the current video frame
+  ctx.drawImage(selfieVideo, 0, 0, width, height);
+  
+  // Compress image to JPEG format (0.6 quality) to keep socket payloads lightweight (~15-25KB)
+  avatarBase64 = selfieCanvas.toDataURL("image/jpeg", 0.6);
+  
+  // Stop camera tracks
+  stopCamera();
+  
+  // Update UI Elements
+  selfieImg.src = avatarBase64;
+  selfieImg.classList.remove("hidden");
+  selfieVideo.classList.add("hidden");
+  
+  btnSnap.classList.add("hidden");
+  btnRetake.classList.remove("hidden");
+  btnUpload.classList.remove("hidden");
+}
+
+function stopCamera() {
+  if (stream) {
+    stream.getTracks().forEach(track => track.stop());
+    stream = null;
+  }
+}
+
+function retakePhoto() {
+  avatarBase64 = null;
+  selfieImg.classList.add("hidden");
+  selfiePlaceholder.classList.remove("hidden");
+  
+  btnRetake.classList.add("hidden");
+  btnStartCamera.classList.remove("hidden");
+  btnUpload.classList.remove("hidden");
+}
+
+// File Upload Fallback
+btnUpload.addEventListener("click", () => {
+  inputFileFallback.click();
+});
+
+inputFileFallback.addEventListener("change", (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  
+  const reader = new FileReader();
+  reader.onload = (event) => {
+    // Resize image using a canvas
+    const img = new Image();
+    img.onload = () => {
+      const width = 300;
+      const height = 300;
+      selfieCanvas.width = width;
+      selfieCanvas.height = height;
+      const ctx = selfieCanvas.getContext("2d");
+      
+      // Draw image centering it
+      const minDim = Math.min(img.width, img.height);
+      const sx = (img.width - minDim) / 2;
+      const sy = (img.height - minDim) / 2;
+      ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, width, height);
+      
+      avatarBase64 = selfieCanvas.toDataURL("image/jpeg", 0.6);
+      
+      // Update UI previews
+      selfieImg.src = avatarBase64;
+      selfieImg.classList.remove("hidden");
+      selfiePlaceholder.classList.add("hidden");
+      selfieVideo.classList.add("hidden");
+      
+      btnStartCamera.classList.add("hidden");
+      btnSnap.classList.add("hidden");
+      btnRetake.classList.remove("hidden");
+    };
+    img.src = event.target.result;
+  };
+  reader.readAsDataURL(file);
 });
 
 /* --- Onboarding Form Submission --- */
@@ -64,17 +250,21 @@ formOnboarding.addEventListener("submit", (e) => {
 
   const userData = {
     name,
+    avatar: avatarBase64, // Base64 JPEG string or null
     isSingle,
     segmentAnswers: { drinkTeam }
   };
 
-  // Register user with server
+  // Register user
   socket.emit("user:register", userData);
 });
 
-// Registration Confirmation
 socket.on("user:registered", (user) => {
   currentUser = user;
+  
+  // Persist session
+  localStorage.setItem("eventos_user_id", user.userId);
+  
   userDisplayName.textContent = user.name;
   
   // Transitions
@@ -82,15 +272,13 @@ socket.on("user:registered", (user) => {
   lobbyScreen.classList.add("active");
   appNav.classList.remove("hidden");
   
-  // If not single, hide Love Match navigation button
   if (!user.isSingle) {
     const matchNavBtn = document.querySelector('[data-screen="match"]');
     if (matchNavBtn) matchNavBtn.style.display = 'none';
   }
 
-  console.log("Successfully registered:", user);
+  console.log("Registered:", user);
   
-  // Trigger initial profiles check if single
   if (currentUser.isSingle) {
     socket.emit("love:get_profiles");
   }
@@ -101,33 +289,28 @@ navButtons.forEach(btn => {
   btn.addEventListener("click", () => {
     const targetScreen = btn.getAttribute("data-screen");
     
-    // Deactivate all nav buttons and screens
     navButtons.forEach(b => b.classList.remove("active"));
     document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
     
-    // Activate clicked screen and button
     btn.classList.add("active");
     if (targetScreen === "lobby") {
       lobbyScreen.classList.add("active");
     } else if (targetScreen === "match") {
       matchScreen.classList.add("active");
-      // Update profiles when opening match page
       socket.emit("love:get_profiles");
     }
   });
 });
 
-/* --- Real-Time App State Synchronization --- */
+/* --- Syncing Active Modules --- */
 socket.on("state:sync", (data) => {
   activeModule = data.activeModule;
   modulesState = data.modules;
-  
   renderActiveModule();
 });
 
-// Render logic for active modules inside the lobby
 function renderActiveModule() {
-  if (!currentUser) return; // User not onboarded yet
+  if (!currentUser) return;
   
   activeModuleTitle.textContent = getModuleDisplayName(activeModule);
   
@@ -146,7 +329,6 @@ function renderActiveModule() {
       `;
     }
   } else {
-    // If other modules (Trivia, Impostor, etc.) are activated by admin
     activeModuleContent.innerHTML = `
       <div class="active-module-alert">
         <p>¡El animador ha activado <strong>${getModuleDisplayName(activeModule)}</strong>!</p>
@@ -154,7 +336,6 @@ function renderActiveModule() {
       </div>
     `;
     
-    // Add logic to enter module when clicked
     const enterBtn = document.getElementById("btn-enter-module");
     if (enterBtn) {
       enterBtn.addEventListener("click", () => {
@@ -174,7 +355,7 @@ function getModuleDisplayName(moduleName) {
   return names[moduleName] || moduleName;
 }
 
-/* --- Love Match Interaction Logic --- */
+/* --- Love Match Grid and Likes --- */
 socket.on("love:profiles", (profiles) => {
   if (!profileDeck) return;
   
@@ -189,14 +370,22 @@ socket.on("love:profiles", (profiles) => {
     card.className = "profile-card";
     
     const drinkText = profile.segmentAnswers?.drinkTeam ? `🍹 Team ${profile.segmentAnswers.drinkTeam}` : '';
-    const hasLiked = currentUser.likes && currentUser.likes.includes(profile.id);
+    const hasLiked = currentUser.likes && currentUser.likes.includes(profile.userId);
+
+    // Avatar HTML rendering
+    const avatarHtml = profile.avatar
+      ? `<img src="${profile.avatar}" class="profile-avatar" alt="${profile.name}">`
+      : `<div class="profile-avatar-placeholder">${profile.name.charAt(0).toUpperCase()}</div>`;
 
     card.innerHTML = `
-      <div class="profile-info">
-        <span class="profile-name">${profile.name}</span>
-        <span class="profile-meta">${drinkText}</span>
+      <div class="profile-card-left">
+        ${avatarHtml}
+        <div class="profile-info">
+          <span class="profile-name">${profile.name}</span>
+          <span class="profile-meta">${drinkText}</span>
+        </div>
       </div>
-      <button class="btn-like ${hasLiked ? 'liked' : ''}" data-id="${profile.id}">
+      <button class="btn-like ${hasLiked ? 'liked' : ''}" data-id="${profile.userId}">
         ${hasLiked ? '❤️' : '🤍'}
       </button>
     `;
@@ -204,50 +393,66 @@ socket.on("love:profiles", (profiles) => {
     profileDeck.appendChild(card);
   });
 
-  // Bind like button actions
+  // Like Action Binding
   const likeButtons = profileDeck.querySelectorAll(".btn-like");
   likeButtons.forEach(btn => {
     btn.addEventListener("click", () => {
-      const targetId = btn.getAttribute("data-id");
+      const targetUserId = btn.getAttribute("data-id");
       
       if (!btn.classList.contains("liked")) {
         btn.classList.add("liked");
         btn.textContent = "❤️";
         
-        // Add to local likes list
         if (!currentUser.likes) currentUser.likes = [];
-        currentUser.likes.push(targetId);
+        currentUser.likes.push(targetUserId);
         
-        // Send like event to server
-        socket.emit("love:like", targetId);
+        socket.emit("love:like", targetUserId);
       }
     });
   });
 });
 
-// Match Popup Alert
+// Mutual Match Alert Popup
 socket.on("love:match", (data) => {
-  // data: { matchUser: { name, ... }, challenge: "..." }
+  // data: { matchUser: { name, avatar, userId }, challenge }
   matchTargetName.textContent = data.matchUser.name;
   matchChallengeText.textContent = data.challenge;
   
-  // Show popup
+  // Render user's avatar in popup
+  if (currentUser.avatar) {
+    matchMyAvatar.src = currentUser.avatar;
+    matchMyAvatar.classList.remove("hidden");
+    matchMyAvatarBox.classList.add("hidden");
+  } else {
+    matchMyAvatarBox.textContent = currentUser.name.charAt(0).toUpperCase();
+    matchMyAvatarBox.classList.remove("hidden");
+    matchMyAvatar.classList.add("hidden");
+  }
+  
+  // Render match target's avatar in popup
+  if (data.matchUser.avatar) {
+    matchTheirAvatar.src = data.matchUser.avatar;
+    matchTheirAvatar.classList.remove("hidden");
+    matchTheirAvatarBox.classList.add("hidden");
+  } else {
+    matchTheirAvatarBox.textContent = data.matchUser.name.charAt(0).toUpperCase();
+    matchTheirAvatarBox.classList.remove("hidden");
+    matchTheirAvatar.classList.add("hidden");
+  }
+  
   matchPopup.classList.remove("hidden");
 });
 
-// Close Match Popup
 btnCloseMatchPopup.addEventListener("click", () => {
   matchPopup.classList.add("hidden");
-  // Redirect to lobby to prompt action
   const lobbyNavBtn = document.querySelector('[data-screen="lobby"]');
   if (lobbyNavBtn) lobbyNavBtn.click();
 });
 
-/* --- Live Countdown Modal Logic (Admin Consignas) --- */
+/* --- Live Countdown Alert Modal (Admin triggers) --- */
 let countdownInterval = null;
 
 socket.on("admin:countdown", (data) => {
-  // data: { durationSeconds, message }
   clearInterval(countdownInterval);
   
   countdownMessage.textContent = data.message;
@@ -272,3 +477,4 @@ function updateTimerDisplay(seconds) {
   const secs = seconds % 60;
   countdownTimerDisplay.textContent = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 }
+
