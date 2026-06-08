@@ -348,3 +348,231 @@ socket.on("trivia:game_over", (data) => {
   // Show Podium modal
   adminPodiumModal.classList.remove("hidden");
 });
+
+/* --- Timed Impostor Control Panel --- */
+
+// DOM Elements
+const adminImpostorCard = document.getElementById("admin-impostor-card");
+const adminImpostorNotStarted = document.getElementById("admin-impostor-not-started");
+const adminImpostorActive = document.getElementById("admin-impostor-active");
+
+const btnAdminImpostorStart = document.getElementById("btn-admin-impostor-start");
+const btnAdminImpostorReveal = document.getElementById("btn-admin-impostor-reveal");
+const btnAdminImpostorNext = document.getElementById("btn-admin-impostor-next");
+const btnAdminImpostorEnd = document.getElementById("btn-admin-impostor-end");
+
+const adminImpostorRNum = document.getElementById("admin-impostor-r-num");
+const adminImpostorRText = document.getElementById("admin-impostor-r-text");
+const adminImpostorVotedCount = document.getElementById("admin-impostor-voted-count");
+const adminImpostorTotalPlayers = document.getElementById("admin-impostor-total-players");
+const adminImpostorOptionsStats = document.getElementById("admin-impostor-options-stats");
+const adminImpostorTablesPanel = document.getElementById("admin-impostor-tables-panel");
+const adminImpostorTablesLog = document.getElementById("admin-impostor-tables-log");
+const adminImpostorActiveModeBadge = document.getElementById("admin-impostor-active-mode-badge");
+
+// Listen for module switch sync
+socket.on("state:sync", (data) => {
+  if (data.activeModule === "impostorMusical") {
+    adminImpostorCard.classList.remove("hidden");
+    socket.emit("admin:request_impostor_sync");
+  } else {
+    adminImpostorCard.classList.add("hidden");
+  }
+});
+
+// Bind Admin buttons
+btnAdminImpostorStart.addEventListener("click", () => {
+  const modeVal = document.querySelector('input[name="admin-impostor-mode"]:checked').value;
+  socket.emit("admin:impostor_start", { mode: modeVal });
+});
+
+btnAdminImpostorReveal.addEventListener("click", () => {
+  socket.emit("admin:impostor_reveal");
+});
+
+btnAdminImpostorNext.addEventListener("click", () => {
+  socket.emit("admin:impostor_next");
+});
+
+btnAdminImpostorEnd.addEventListener("click", () => {
+  if (confirm("¿Estás seguro de que querés finalizar el juego y mostrar el podio?")) {
+    socket.emit("admin:impostor_end");
+  }
+});
+
+// Receive Impostor updates
+socket.on("admin:impostor_update", (data) => {
+  console.log("Admin Impostor update received:", data);
+
+  if (!data.active && data.currentRoundIndex === -1) {
+    adminImpostorCard.classList.add("hidden");
+    return;
+  }
+
+  adminImpostorCard.classList.remove("hidden");
+
+  if (data.currentRoundIndex === -1) {
+    adminImpostorNotStarted.classList.remove("hidden");
+    adminImpostorActive.classList.add("hidden");
+  } else {
+    adminImpostorNotStarted.classList.add("hidden");
+    adminImpostorActive.classList.remove("hidden");
+
+    // Populate question details
+    const totalRounds = 5;
+    adminImpostorRNum.textContent = `${data.currentRoundIndex + 1}/${totalRounds}`;
+    adminImpostorActiveModeBadge.textContent = data.mode.toUpperCase();
+    adminImpostorRText.textContent = data.round ? data.round.question : "";
+    adminImpostorVotedCount.textContent = data.votedCount;
+    adminImpostorTotalPlayers.textContent = data.totalPlayers;
+
+    // Render option distribution percentages
+    adminImpostorOptionsStats.innerHTML = "";
+    if (data.round && data.round.options) {
+      data.round.options.forEach((opt, idx) => {
+        const votes = data.optionVotes ? (data.optionVotes[idx] || 0) : 0;
+        const pct = data.votedCount > 0 ? Math.round((votes / data.votedCount) * 100) : 0;
+        const isCorrect = idx === data.round.correctIndex;
+        const revealState = data.answerRevealed;
+
+        const barColor = revealState ? (isCorrect ? 'var(--success)' : 'rgba(255,74,90,0.2)') : 'var(--accent-purple)';
+        const borderStyle = revealState && isCorrect ? 'border: 1px solid var(--success);' : 'border: 1px solid rgba(255,255,255,0.05);';
+
+        const row = document.createElement("div");
+        row.style = `position: relative; background: rgba(255,255,255,0.02); border-radius: 6px; padding: 10px; overflow: hidden; ${borderStyle}`;
+        row.innerHTML = `
+          <div style="position: absolute; top: 0; left: 0; bottom: 0; width: ${pct}%; background: ${barColor}; opacity: 0.15; transition: width 0.3s ease;"></div>
+          <div style="display: flex; justify-content: space-between; position: relative; z-index: 1; font-size: 0.8rem;">
+            <span style="font-weight: 600; color: ${revealState && isCorrect ? 'var(--success)' : 'white'}">${idx + 1}. ${opt} ${revealState && isCorrect ? '🎯' : ''}</span>
+            <span style="color: var(--text-secondary); font-weight: 800;">${votes} (${pct}%)</span>
+          </div>
+        `;
+        adminImpostorOptionsStats.appendChild(row);
+      });
+    }
+
+    // Render Table Consensus statuses if in Table Mode
+    if (data.mode === "mesa") {
+      adminImpostorTablesPanel.classList.remove("hidden");
+      adminImpostorTablesLog.innerHTML = "";
+      if (data.tableStatuses && data.tableStatuses.length > 0) {
+        data.tableStatuses.forEach(table => {
+          const optText = table.consensusOption !== null && data.round
+            ? `${table.consensusOption + 1}. ${data.round.options[table.consensusOption]}`
+            : '<span style="color: var(--text-secondary); font-style: italic;">Sin voto consensuado</span>';
+          
+          const row = document.createElement("div");
+          row.style = "display: flex; justify-content: space-between; font-size: 0.8rem; padding: 6px 10px; background: rgba(255,255,255,0.02); border-radius: 6px; border: 1px solid rgba(255,255,255,0.03);";
+          
+          const isCorrect = data.answerRevealed && data.round && table.consensusOption === data.round.correctIndex;
+          const labelStyle = isCorrect ? 'color: var(--success); font-weight: 800;' : 'color: white;';
+          
+          row.innerHTML = `
+            <span style="font-weight: 600;">Mesa ${table.tableNumber}:</span>
+            <span style="${labelStyle}">${optText} (${table.votedCount} votos)</span>
+          `;
+          adminImpostorTablesLog.appendChild(row);
+        });
+      } else {
+        adminImpostorTablesLog.innerHTML = '<p style="font-size: 0.75rem; color: var(--text-secondary); font-style: italic; text-align: center; padding: 10px 0;">Esperando votos de las mesas...</p>';
+      }
+    } else {
+      adminImpostorTablesPanel.classList.add("hidden");
+    }
+
+    // Toggle reveal / next / end buttons
+    if (data.answerRevealed) {
+      btnAdminImpostorReveal.classList.add("hidden");
+      
+      const isLastRound = data.currentRoundIndex >= 4; // 5 rounds (index 0 to 4)
+      if (isLastRound) {
+        btnAdminImpostorNext.classList.add("hidden");
+        btnAdminImpostorEnd.classList.remove("hidden");
+      } else {
+        btnAdminImpostorNext.classList.remove("hidden");
+        btnAdminImpostorEnd.classList.add("hidden");
+      }
+    } else {
+      btnAdminImpostorReveal.classList.remove("hidden");
+      btnAdminImpostorNext.classList.add("hidden");
+      btnAdminImpostorEnd.classList.add("hidden");
+    }
+  }
+});
+
+// Receive game over & podium details
+socket.on("impostor:game_over", (data) => {
+  console.log("Impostor game over event. Standings received:", data);
+  
+  // Reset Podium names and scores
+  podium1Name.textContent = "-";
+  podium1Score.textContent = "0 pts";
+  podium1AvatarContainer.innerHTML = renderPodiumAvatar(null);
+
+  podium2Name.textContent = "-";
+  podium2Score.textContent = "0 pts";
+  podium2AvatarContainer.innerHTML = renderPodiumAvatar(null);
+
+  podium3Name.textContent = "-";
+  podium3Score.textContent = "0 pts";
+  podium3AvatarContainer.innerHTML = renderPodiumAvatar(null);
+
+  const isTableMode = data.tableLeaderboard && data.tableLeaderboard.length > 0;
+  
+  if (isTableMode) {
+    // Show table rankings on the podium
+    document.querySelector("#admin-podium-modal h2").textContent = "🏆 MESAS GANADORAS 🏆";
+    
+    const renderTableIcon = () => `
+      <div style="width: 50px; height: 50px; border-radius: 50%; background: linear-gradient(135deg, var(--accent-gold) 0%, var(--accent-purple) 100%); color: white; font-weight: 800; font-size: 1.5rem; display: flex; align-items: center; justify-content: center; border: 2px solid var(--accent-gold);">🍽️</div>
+    `;
+
+    if (data.tableLeaderboard.length >= 1) {
+      const p1 = data.tableLeaderboard[0];
+      podium1Name.textContent = `Mesa ${p1.tableNumber}`;
+      podium1Score.textContent = `${p1.score} pts`;
+      podium1AvatarContainer.innerHTML = renderTableIcon();
+    }
+    
+    if (data.tableLeaderboard.length >= 2) {
+      const p2 = data.tableLeaderboard[1];
+      podium2Name.textContent = `Mesa ${p2.tableNumber}`;
+      podium2Score.textContent = `${p2.score} pts`;
+      podium2AvatarContainer.innerHTML = renderTableIcon();
+    }
+
+    if (data.tableLeaderboard.length >= 3) {
+      const p3 = data.tableLeaderboard[2];
+      podium3Name.textContent = `Mesa ${p3.tableNumber}`;
+      podium3Score.textContent = `${p3.score} pts`;
+      podium3AvatarContainer.innerHTML = renderTableIcon();
+    }
+  } else {
+    // Show individual rankings
+    document.querySelector("#admin-podium-modal h2").textContent = "🏆 PODIO IMPOSTOR 🏆";
+    
+    if (data.leaderboard.length >= 1) {
+      const p1 = data.leaderboard[0];
+      podium1Name.textContent = p1.name;
+      podium1Score.textContent = `${p1.score} pts`;
+      podium1AvatarContainer.innerHTML = renderPodiumAvatar(p1);
+    }
+    
+    if (data.leaderboard.length >= 2) {
+      const p2 = data.leaderboard[1];
+      podium2Name.textContent = p2.name;
+      podium2Score.textContent = `${p2.score} pts`;
+      podium2AvatarContainer.innerHTML = renderPodiumAvatar(p2);
+    }
+
+    if (data.leaderboard.length >= 3) {
+      const p3 = data.leaderboard[2];
+      podium3Name.textContent = p3.name;
+      podium3Score.textContent = `${p3.score} pts`;
+      podium3AvatarContainer.innerHTML = renderPodiumAvatar(p3);
+    }
+  }
+
+  // Show Podium modal
+  adminPodiumModal.classList.remove("hidden");
+});

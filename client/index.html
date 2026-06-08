@@ -64,6 +64,11 @@
               </div>
             </div>
 
+            <div class="form-group">
+              <label for="input-table">Número de Mesa 🍽️</label>
+              <input type="number" id="input-table" placeholder="Ej. 12" min="1" max="100" required>
+            </div>
+
             <div class="form-group checkbox-group">
               <input type="checkbox" id="input-single" checked>
               <label for="input-single" class="checkbox-label">
@@ -204,6 +209,78 @@
           </div>
         </div>
       </section>
+
+      <!-- Impostor Screen -->
+      <section id="screen-impostor" class="screen">
+        <div class="impostor-container">
+          <div class="glass-card impostor-card" style="padding: 24px 20px;">
+            <div class="impostor-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; font-weight: 600;">
+              <div class="impostor-progress" style="font-size: 0.85rem; color: var(--accent-gold); font-family: var(--font-title);">Ronda <span id="impostor-current-r-num">1</span> de <span id="impostor-total-r-num">5</span></div>
+              <div class="impostor-score" style="font-size: 0.85rem; color: white; background: rgba(255,255,255,0.05); padding: 4px 10px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.05);">Puntos: <span id="impostor-my-score" style="font-weight: 800; color: var(--accent-gold);">0</span></div>
+              <button id="btn-exit-impostor" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.25rem; font-weight: 300; line-height: 1; padding: 4px;">✕</button>
+            </div>
+            
+            <!-- Timer Bar -->
+            <div class="impostor-timer-wrapper" style="width: 100%; height: 8px; background: rgba(255, 255, 255, 0.08); border-radius: 4px; overflow: hidden; margin: 15px 0 20px;">
+              <div id="impostor-timer-bar" style="width: 100%; height: 100%; background: linear-gradient(90deg, var(--accent-gold) 0%, var(--accent-pink) 100%); transition: width 0.1s linear;"></div>
+            </div>
+            
+            <!-- Waiting Screen (before first round starts) -->
+            <div id="impostor-waiting" class="impostor-state-section">
+              <div class="impostor-icon" style="font-size: 3.5rem; text-align: center; margin-bottom: 16px;">🎵</div>
+              <h3 style="font-family: var(--font-title); text-align: center; font-size: 1.3rem; margin-bottom: 8px; color: var(--accent-gold);">Prepárate para El Impostor Musical</h3>
+              <p style="text-align: center; color: var(--text-secondary); font-size: 0.9rem; line-height: 1.4;">
+                El DJ va a reproducir un fragmento de una canción modificado (al revés, acelerado o aislado). ¡Debes adivinar de qué tema se trata!
+              </p>
+            </div>
+            
+            <!-- Active Question Screen -->
+            <div id="impostor-question-active" class="impostor-state-section hidden">
+              <h3 id="impostor-q-text" style="font-family: var(--font-title); font-size: 1.15rem; margin-bottom: 16px; line-height: 1.4;">¿Qué canción clásica está sonando al revés?</h3>
+              
+              <!-- Consensus of Table (Visible only in Table Mode) -->
+              <div id="impostor-table-consensus-box" class="hidden" style="background: rgba(226, 192, 116, 0.08); border: 1px dashed var(--accent-gold); border-radius: 8px; padding: 12px; margin-bottom: 16px; font-size: 0.8rem; line-height: 1.4;">
+                <strong style="color: var(--accent-gold);">🍽️ Consenso en tu Mesa <span id="impostor-my-table-num">X</span>:</strong>
+                <div id="impostor-table-votes-tally" style="margin-top: 6px; display: flex; flex-direction: column; gap: 4px;">
+                  <!-- Live table consensus tallies filled dynamically -->
+                </div>
+              </div>
+
+              <div id="impostor-options-grid" style="display: flex; flex-direction: column; gap: 12px;">
+                <!-- Option buttons dynamically populated -->
+              </div>
+            </div>
+            
+            <!-- Feedback screen (Answer revealed) -->
+            <div id="impostor-feedback" class="impostor-state-section hidden" style="text-align: center;">
+              <div id="impostor-feedback-icon" style="font-size: 3.5rem; margin-bottom: 12px;">🎉</div>
+              <h3 id="impostor-feedback-title" style="font-family: var(--font-title); font-size: 1.4rem; margin-bottom: 8px;">¡Correcto!</h3>
+              <p id="impostor-feedback-pts" style="font-size: 1.25rem; font-weight: 800; color: var(--accent-gold); margin-bottom: 16px;">+500 pts</p>
+              
+              <div class="impostor-correct-explanation" style="background: rgba(255, 255, 255, 0.02); padding: 12px 16px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); text-align: left; font-size: 0.85rem; margin-bottom: 20px; line-height: 1.4;">
+                <strong style="color: var(--accent-gold);">Canción correcta:</strong> <span id="impostor-correct-option-text">-</span>
+              </div>
+              <p style="color: var(--text-secondary); font-size: 0.85rem;">Esperando la siguiente ronda del DJ...</p>
+            </div>
+            
+            <!-- Game Over / Final Leaderboard view -->
+            <div id="impostor-game-over" class="impostor-state-section hidden" style="text-align: center;">
+              <div style="font-size: 3.5rem; margin-bottom: 12px;">🏁</div>
+              <h3 style="font-family: var(--font-title); font-size: 1.5rem; margin-bottom: 6px; color: var(--accent-gold);">Juego Finalizado</h3>
+              <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 20px;">Tu puntaje final: <span id="impostor-final-score" style="color: var(--accent-gold); font-weight: 800;">0</span> puntos</p>
+              
+              <div style="background: rgba(255, 255, 255, 0.02); padding: 16px; border-radius: 12px; border: 1px solid var(--card-border); text-align: left;">
+                <h4 id="impostor-leaderboard-title" style="font-family: var(--font-title); margin-bottom: 12px; font-size: 0.95rem; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 6px; color: var(--accent-gold); letter-spacing: 0.5px;">Tabla de Posiciones 🏆</h4>
+                <div id="impostor-client-leaderboard" style="display: flex; flex-direction: column; gap: 8px; max-height: 200px; overflow-y: auto; padding-right: 4px;">
+                  <!-- Leaderboard rows filled dynamically -->
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
 
     </main>
 

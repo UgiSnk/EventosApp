@@ -101,6 +101,44 @@ const triviaQuestions = [
   }
 ];
 
+const impostorRounds = [
+  {
+    id: 0,
+    question: "¿Qué clásico nacional está sonando invertido (al revés)? 🔄",
+    options: ["Ji Ji Ji - Patricio Rey", "Persiana Americana - Soda Stereo", "La Bifurcada - Memphis La Blusera", "Matador - Los Fabulosos Cadillacs"],
+    correctIndex: 0,
+    timeLimit: 20
+  },
+  {
+    id: 1,
+    question: "¿Qué tema suena acelerado al 150% de velocidad? ⚡",
+    options: ["De Música Ligera - Soda Stereo", "Provócame - Chayanne", "Mil Horas - Los Abuelos de la Nada", "La Ventanita - Sombras"],
+    correctIndex: 2,
+    timeLimit: 20
+  },
+  {
+    id: 2,
+    question: "¿Qué instrumento está sonando aislado en este fragmento? 🎸",
+    options: ["Línea de Bajo eléctrico", "Solo de Saxofón", "Sintetizador / Teclados", "Solo de Batería"],
+    correctIndex: 0,
+    timeLimit: 20
+  },
+  {
+    id: 3,
+    question: "¿Qué hit de fiesta está sonando distorsionado? 🤪",
+    options: ["La Bifurcada - Memphis", "Aserejé - Las Ketchup", "Macarena - Los del Río", "El Murguero - Los Auténticos Decadentes"],
+    correctIndex: 3,
+    timeLimit: 20
+  },
+  {
+    id: 4,
+    question: "¿Qué clásico nacional suena de fondo despojado de voces? 🎤",
+    options: ["Seguir Viviendo Sin Tu Amor - Spinetta", "Seminare - Serú Girán", "Rezo por Vos - Charly García", "Muchacha Ojos de Papel - Almendra"],
+    correctIndex: 0,
+    timeLimit: 20
+  }
+];
+
 // App State (In-Memory with persistent userId indexing)
 const state = {
   activeModule: 'loveMatch',
@@ -121,6 +159,17 @@ const state = {
     answers: {},     // { [userId]: { [questionIndex]: { answerIndex, score, timeTaken } } }
     scores: {},      // { [userId]: totalScore }
     questions: triviaQuestions
+  },
+  impostor: {        // Real-time music game state
+    active: false,
+    currentRoundIndex: -1,
+    roundStartTime: null,
+    answerRevealed: false,
+    mode: 'individual', // 'individual' or 'mesa'
+    rounds: impostorRounds,
+    votes: {},     // { [userId]: answerIndex }
+    scores: {},    // { [userId]: totalScore }
+    tableScores: {} // { [tableNum]: totalScore }
   }
 };
 
@@ -231,6 +280,172 @@ const broadcastTriviaState = () => {
   io.emit('admin:trivia_update', getTriviaAdminState());
 };
 
+// Helpers for Impostor Musical
+const getImpostorLeaderboard = () => {
+  return Object.keys(state.users)
+    .map(uid => {
+      const user = state.users[uid];
+      return {
+        userId: uid,
+        name: user ? user.name : "Invitado",
+        avatar: user ? user.avatar : null,
+        tableNumber: user ? user.tableNumber : null,
+        score: state.impostor.scores[uid] || 0
+      };
+    })
+    .sort((a, b) => b.score - a.score);
+};
+
+const getImpostorTableLeaderboard = () => {
+  const tables = new Set();
+  Object.values(state.users).forEach(u => {
+    if (u.tableNumber) {
+      tables.add(u.tableNumber);
+    }
+  });
+  return Array.from(tables)
+    .map(tNum => ({
+      tableNumber: parseInt(tNum, 10),
+      score: state.impostor.tableScores[tNum] || 0
+    }))
+    .sort((a, b) => b.score - a.score);
+};
+
+const getImpostorStateForUser = (userId) => {
+  const user = state.users[userId];
+  const tableNum = user ? user.tableNumber : null;
+  const currentIdx = state.impostor.currentRoundIndex;
+  
+  const round = currentIdx >= 0 && currentIdx < state.impostor.rounds.length
+    ? state.impostor.rounds[currentIdx]
+    : null;
+
+  let cleanRound = null;
+  if (round) {
+    cleanRound = {
+      id: round.id,
+      question: round.question,
+      options: round.options,
+      timeLimit: round.timeLimit
+    };
+  }
+
+  // Tally table votes for the current round
+  let tableVotes = [0, 0, 0, 0];
+  let tableMemberCount = 0;
+  if (tableNum && state.impostor.mode === 'mesa') {
+    Object.values(state.users).forEach(u => {
+      if (u.tableNumber === tableNum) {
+        tableMemberCount++;
+        const voteData = state.impostor.votes[u.userId];
+        const vote = voteData ? voteData.answerIndex : undefined;
+        if (vote !== undefined && vote >= 0 && vote < 4) {
+          tableVotes[vote]++;
+        }
+      }
+    });
+  }
+
+  const myVoteData = state.impostor.votes[userId];
+  const myVote = myVoteData !== undefined && myVoteData !== null ? myVoteData.answerIndex : null;
+
+  return {
+    active: state.impostor.active,
+    currentRoundIndex: currentIdx,
+    round: cleanRound,
+    roundStartTime: state.impostor.roundStartTime,
+    answerRevealed: state.impostor.answerRevealed,
+    correctIndex: state.impostor.answerRevealed && round ? round.correctIndex : null,
+    mode: state.impostor.mode,
+    myVote,
+    myTotalScore: state.impostor.scores[userId] || 0,
+    myTableNumber: tableNum,
+    tableVotes,
+    tableMemberCount,
+    leaderboard: getImpostorLeaderboard(),
+    tableLeaderboard: getImpostorTableLeaderboard()
+  };
+};
+
+const getImpostorAdminState = () => {
+  const currentIdx = state.impostor.currentRoundIndex;
+  const round = currentIdx >= 0 && currentIdx < state.impostor.rounds.length
+    ? state.impostor.rounds[currentIdx]
+    : null;
+
+  // Count votes
+  let votedCount = Object.keys(state.impostor.votes).length;
+  const optionVotes = [0, 0, 0, 0];
+  Object.values(state.impostor.votes).forEach(voteData => {
+    const vote = voteData ? voteData.answerIndex : undefined;
+    if (vote !== undefined && vote >= 0 && vote < 4) {
+      optionVotes[vote]++;
+    }
+  });
+
+  // Calculate table statuses: e.g. how each table is voting
+  const tableStatuses = {};
+  Object.values(state.users).forEach(u => {
+    if (u.tableNumber) {
+      if (!tableStatuses[u.tableNumber]) {
+        tableStatuses[u.tableNumber] = {
+          tableNumber: u.tableNumber,
+          optionVotes: [0, 0, 0, 0],
+          votedCount: 0,
+          consensusOption: null
+        };
+      }
+      
+      const voteData = state.impostor.votes[u.userId];
+      const vote = voteData ? voteData.answerIndex : undefined;
+      if (vote !== undefined && vote >= 0 && vote < 4) {
+        tableStatuses[u.tableNumber].optionVotes[vote]++;
+        tableStatuses[u.tableNumber].votedCount++;
+      }
+    }
+  });
+
+  // Determine consensus for each table
+  Object.keys(tableStatuses).forEach(tNum => {
+    const table = tableStatuses[tNum];
+    let maxVotes = 0;
+    let consensus = null;
+    table.optionVotes.forEach((votes, idx) => {
+      if (votes > maxVotes) {
+        maxVotes = votes;
+        consensus = idx;
+      }
+    });
+    table.consensusOption = consensus;
+  });
+
+  const totalConnected = Object.values(state.users).filter(u => u.connected).length;
+
+  return {
+    active: state.impostor.active,
+    currentRoundIndex: currentIdx,
+    round,
+    answerRevealed: state.impostor.answerRevealed,
+    mode: state.impostor.mode,
+    votedCount,
+    totalPlayers: totalConnected,
+    optionVotes,
+    tableStatuses: Object.values(tableStatuses),
+    leaderboard: getImpostorLeaderboard(),
+    tableLeaderboard: getImpostorTableLeaderboard()
+  };
+};
+
+const broadcastImpostorState = () => {
+  for (const [socketId, socketInstance] of io.of("/").sockets) {
+    const userId = state.socketToUser[socketId];
+    if (userId) {
+      socketInstance.emit('impostor:state', getImpostorStateForUser(userId));
+    }
+  }
+  io.emit('admin:impostor_update', getImpostorAdminState());
+};
+
 // Helper to generate unique ID
 const generateUserId = () => Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
 
@@ -272,6 +487,7 @@ io.on('connection', (socket) => {
     socket.emit('user:registered', state.users[userId]);
     io.emit('user:list_update', getActiveUserList());
     broadcastTriviaState();
+    broadcastImpostorState();
   });
 
   // Handle user reconnection (Session restoration)
@@ -295,6 +511,7 @@ io.on('connection', (socket) => {
       socket.emit('user:reconnected', user);
       io.emit('user:list_update', getActiveUserList());
       broadcastTriviaState();
+      broadcastImpostorState();
     } else {
       console.log(`Reconnection failed for ID: ${userId}`);
       socket.emit('user:reconnect_failed');
@@ -523,6 +740,151 @@ io.on('connection', (socket) => {
     }
   });
 
+  // --- Timed Impostor Admin Control ---
+
+  socket.on('admin:impostor_start', ({ mode }) => {
+    state.impostor.active = true;
+    state.impostor.currentRoundIndex = 0;
+    state.impostor.roundStartTime = Date.now();
+    state.impostor.answerRevealed = false;
+    state.impostor.mode = mode || 'individual';
+    state.impostor.votes = {};
+    state.impostor.scores = {};
+    state.impostor.tableScores = {};
+
+    // Initialize individual scores for all registered users
+    Object.keys(state.users).forEach(uid => {
+      state.impostor.scores[uid] = 0;
+    });
+
+    console.log(`[IMPOSTOR] Game started by Admin in Mode: ${state.impostor.mode}`);
+    broadcastImpostorState();
+  });
+
+  socket.on('admin:impostor_next', () => {
+    const nextIdx = state.impostor.currentRoundIndex + 1;
+    if (nextIdx < state.impostor.rounds.length) {
+      state.impostor.currentRoundIndex = nextIdx;
+      state.impostor.roundStartTime = Date.now();
+      state.impostor.answerRevealed = false;
+      state.impostor.votes = {};
+
+      console.log(`[IMPOSTOR] Moved to round ${nextIdx} by Admin.`);
+      broadcastImpostorState();
+    }
+  });
+
+  socket.on('admin:impostor_reveal', () => {
+    state.impostor.answerRevealed = true;
+    const currentIdx = state.impostor.currentRoundIndex;
+    const round = state.impostor.rounds[currentIdx];
+    const correctIdx = round.correctIndex;
+
+    console.log(`[IMPOSTOR] Answer revealed for round ${currentIdx}. Correct option: ${correctIdx}`);
+
+    if (state.impostor.mode === 'individual') {
+      // Award individual speed-based scores
+      Object.keys(state.impostor.votes).forEach(uid => {
+        const voteData = state.impostor.votes[uid];
+        if (voteData && voteData.answerIndex === correctIdx) {
+          const timeTaken = voteData.timeTaken;
+          const timeLimit = round.timeLimit;
+          const ratio = Math.max(0, Math.min(1, timeTaken / timeLimit));
+          const score = Math.max(100, Math.round(1000 - ratio * 900));
+          state.impostor.scores[uid] = (state.impostor.scores[uid] || 0) + score;
+        }
+      });
+    } else if (state.impostor.mode === 'mesa') {
+      // Group votes by table desync-free
+      const tableVotes = {};
+      Object.values(state.users).forEach(u => {
+        if (u.tableNumber) {
+          tableVotes[u.tableNumber] = tableVotes[u.tableNumber] || [0, 0, 0, 0];
+          const voteData = state.impostor.votes[u.userId];
+          if (voteData && voteData.answerIndex >= 0 && voteData.answerIndex < 4) {
+            tableVotes[u.tableNumber][voteData.answerIndex]++;
+          }
+        }
+      });
+
+      // Calculate consensus and award points to correct tables
+      Object.keys(tableVotes).forEach(tNum => {
+        const votes = tableVotes[tNum];
+        let maxVotes = 0;
+        let consensusOption = null;
+        votes.forEach((vCount, idx) => {
+          if (vCount > maxVotes) {
+            maxVotes = vCount;
+            consensusOption = idx;
+          }
+        });
+
+        if (consensusOption === correctIdx) {
+          state.impostor.tableScores[tNum] = (state.impostor.tableScores[tNum] || 0) + 500;
+          
+          Object.values(state.users).forEach(u => {
+            if (u.tableNumber === parseInt(tNum, 10)) {
+              state.impostor.scores[u.userId] = (state.impostor.scores[u.userId] || 0) + 500;
+            }
+          });
+          console.log(`[IMPOSTOR] Table ${tNum} reached correct consensus! Awarded 500 pts.`);
+        } else {
+          console.log(`[IMPOSTOR] Table ${tNum} consensus was incorrect (Option ${consensusOption}).`);
+        }
+      });
+    }
+
+    broadcastImpostorState();
+  });
+
+  socket.on('admin:impostor_end', () => {
+    state.impostor.active = false;
+    console.log(`[IMPOSTOR] Game ended by Admin.`);
+    
+    io.emit('impostor:game_over', { 
+      leaderboard: getImpostorLeaderboard(),
+      tableLeaderboard: getImpostorTableLeaderboard()
+    });
+    broadcastImpostorState();
+  });
+
+  socket.on('admin:request_impostor_sync', () => {
+    socket.emit('admin:impostor_update', getImpostorAdminState());
+  });
+
+  // --- Timed Impostor Client Submissions ---
+
+  socket.on('impostor:submit_vote', ({ roundIndex, answerIndex }) => {
+    const userId = state.socketToUser[socket.id];
+    if (!userId) return;
+
+    const user = state.users[userId];
+    if (!user) return;
+
+    if (!state.impostor.active || state.impostor.currentRoundIndex !== roundIndex) {
+      return;
+    }
+
+    const round = state.impostor.rounds[roundIndex];
+    const timeTaken = (Date.now() - state.impostor.roundStartTime) / 1000;
+
+    // Record or update vote dynamically
+    state.impostor.votes[userId] = {
+      answerIndex,
+      timeTaken
+    };
+
+    console.log(`[IMPOSTOR] User "${user.name}" (Table ${user.tableNumber}) voted option ${answerIndex} (Time: ${timeTaken.toFixed(2)}s)`);
+    broadcastImpostorState();
+  });
+
+  socket.on('impostor:request_sync', () => {
+    const userId = state.socketToUser[socket.id];
+    if (userId) {
+      socket.emit('impostor:state', getImpostorStateForUser(userId));
+    }
+  });
+
   // Admin Module Control
   socket.on('admin:activate_module', (moduleName) => {
     if (state.modules[moduleName]) {
@@ -540,6 +902,9 @@ io.on('connection', (socket) => {
       
       if (moduleName === 'trivia') {
         broadcastTriviaState();
+      }
+      if (moduleName === 'impostorMusical') {
+        broadcastImpostorState();
       }
     }
   });
@@ -579,6 +944,19 @@ io.on('connection', (socket) => {
       questions: triviaQuestions
     };
 
+    // Reset Impostor state
+    state.impostor = {
+      active: false,
+      currentRoundIndex: -1,
+      roundStartTime: null,
+      answerRevealed: false,
+      mode: 'individual',
+      rounds: impostorRounds,
+      votes: {},
+      scores: {},
+      tableScores: {}
+    };
+
     // Notify all clients to clear local cache and return to onboarding
     io.emit('admin:reset_forced');
     
@@ -589,6 +967,7 @@ io.on('connection', (socket) => {
     });
     io.emit('user:list_update', []);
     broadcastTriviaState();
+    broadcastImpostorState();
   });
 
   // Handle disconnection

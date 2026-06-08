@@ -25,6 +25,7 @@ const appNav = document.querySelector(".app-nav");
 // DOM Elements - Onboarding Form
 const formOnboarding = document.getElementById("form-onboarding");
 const inputName = document.getElementById("input-name");
+const inputTable = document.getElementById("input-table");
 const inputSingle = document.getElementById("input-single");
 const userDisplayName = document.getElementById("user-display-name");
 
@@ -243,6 +244,7 @@ formOnboarding.addEventListener("submit", (e) => {
   e.preventDefault();
   
   const name = inputName.value.trim();
+  const tableNumber = parseInt(inputTable.value, 10) || 1;
   const isSingle = inputSingle.checked;
   const drinkTeam = document.querySelector('input[name="drink-team"]:checked').value;
   
@@ -250,6 +252,7 @@ formOnboarding.addEventListener("submit", (e) => {
 
   const userData = {
     name,
+    tableNumber,
     avatar: avatarBase64, // Base64 JPEG string or null
     isSingle,
     segmentAnswers: { drinkTeam }
@@ -376,6 +379,11 @@ function renderActiveModule() {
           document.getElementById("screen-trivia").classList.add("active");
           navButtons.forEach(b => b.classList.remove("active"));
           socket.emit("trivia:request_sync");
+        } else if (activeModule === 'impostorMusical') {
+          document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+          document.getElementById("screen-impostor").classList.add("active");
+          navButtons.forEach(b => b.classList.remove("active"));
+          socket.emit("impostor:request_sync");
         } else {
           alert(`Entrando a: ${getModuleDisplayName(activeModule)} (Próximamente en las siguientes fases!)`);
         }
@@ -1029,3 +1037,333 @@ socket.on("trivia:game_over", (data) => {
     triviaClientLeaderboard.appendChild(row);
   });
 });
+
+/* --- Timed Impostor Client Module --- */
+
+// DOM Elements
+const screenImpostor = document.getElementById("screen-impostor");
+const btnExitImpostor = document.getElementById("btn-exit-impostor");
+const impostorCurrentRNum = document.getElementById("impostor-current-r-num");
+const impostorTotalRNum = document.getElementById("impostor-total-r-num");
+const impostorMyScore = document.getElementById("impostor-my-score");
+const impostorTimerBar = document.getElementById("impostor-timer-bar");
+
+const impostorWaitingSection = document.getElementById("impostor-waiting");
+const impostorQuestionActiveSection = document.getElementById("impostor-question-active");
+const impostorQText = document.getElementById("impostor-q-text");
+const impostorTableConsensusBox = document.getElementById("impostor-table-consensus-box");
+const impostorMyTableNum = document.getElementById("impostor-my-table-num");
+const impostorTableVotesTally = document.getElementById("impostor-table-votes-tally");
+const impostorOptionsGrid = document.getElementById("impostor-options-grid");
+
+const impostorFeedbackSection = document.getElementById("impostor-feedback");
+const impostorFeedbackIcon = document.getElementById("impostor-feedback-icon");
+const impostorFeedbackTitle = document.getElementById("impostor-feedback-title");
+const impostorFeedbackPts = document.getElementById("impostor-feedback-pts");
+const impostorCorrectOptionText = document.getElementById("impostor-correct-option-text");
+
+const impostorGameOverSection = document.getElementById("impostor-game-over");
+const impostorLeaderboardTitle = document.getElementById("impostor-leaderboard-title");
+const impostorFinalScore = document.getElementById("impostor-final-score");
+const impostorClientLeaderboard = document.getElementById("impostor-client-leaderboard");
+
+let impostorTimerInterval = null;
+let currentRoundIndexLocal = -1;
+
+// Exit Impostor button handler
+btnExitImpostor.addEventListener("click", () => {
+  screenImpostor.classList.remove("active");
+  lobbyScreen.classList.add("active");
+  
+  // Highlight Lobby nav button
+  navButtons.forEach(btn => {
+    if (btn.getAttribute("data-screen") === "lobby") {
+      btn.classList.add("active");
+    } else {
+      btn.classList.remove("active");
+    }
+  });
+});
+
+// Helper to start the ticking visual bar desync-free
+function startImpostorTimer(startTimeMs, limitSeconds, onTimeout) {
+  clearInterval(impostorTimerInterval);
+  if (!impostorTimerBar) return;
+
+  const totalMs = limitSeconds * 1000;
+  
+  const updateTimer = () => {
+    const elapsedMs = Date.now() - startTimeMs;
+    const remainingPct = Math.max(0, 100 - (elapsedMs / totalMs) * 100);
+    impostorTimerBar.style.width = `${remainingPct}%`;
+
+    if (elapsedMs >= totalMs) {
+      clearInterval(impostorTimerInterval);
+      impostorTimerBar.style.width = "0%";
+      if (onTimeout) onTimeout();
+    }
+  };
+
+  updateTimer();
+  impostorTimerInterval = setInterval(updateTimer, 100);
+}
+
+function stopImpostorTimer() {
+  clearInterval(impostorTimerInterval);
+  if (impostorTimerBar) impostorTimerBar.style.width = "100%";
+}
+
+// Socket: Receive Impostor state desync-free
+socket.on("impostor:state", (data) => {
+  console.log("Client Impostor state updated:", data);
+  
+  if (!currentUser) return;
+
+  // Sync scores
+  impostorMyScore.textContent = data.myTotalScore;
+  
+  // Toggle screens based on active round index
+  if (!data.active && data.currentRoundIndex === -1) {
+    if (screenImpostor.classList.contains("active")) {
+      btnExitImpostor.click();
+    }
+    stopImpostorTimer();
+    return;
+  }
+
+  // Set totals
+  impostorTotalRNum.textContent = "5";
+
+  // Hide all sections inside impostor card first
+  impostorWaitingSection.classList.add("hidden");
+  impostorQuestionActiveSection.classList.add("hidden");
+  impostorFeedbackSection.classList.add("hidden");
+  impostorGameOverSection.classList.add("hidden");
+
+  // Determine view based on state
+  if (data.currentRoundIndex === -1) {
+    // Waiting to start
+    impostorWaitingSection.classList.remove("hidden");
+    stopImpostorTimer();
+  } else {
+    // Game is playing
+    impostorCurrentRNum.textContent = data.currentRoundIndex + 1;
+    currentRoundIndexLocal = data.currentRoundIndex;
+
+    if (data.answerRevealed) {
+      // Correctness Reveal state
+      stopImpostorTimer();
+      impostorFeedbackSection.classList.remove("hidden");
+      
+      const chosenIdx = data.myVote;
+      const correctIdx = data.correctIndex;
+      
+      if (data.mode === 'mesa') {
+        // Find consensus choice
+        let maxVotes = 0;
+        let consensusOption = null;
+        if (data.tableVotes) {
+          data.tableVotes.forEach((vCount, idx) => {
+            if (vCount > maxVotes) {
+              maxVotes = vCount;
+              consensusOption = idx;
+            }
+          });
+        }
+        
+        const tableWon = consensusOption === correctIdx;
+        
+        if (tableWon) {
+          impostorFeedbackIcon.textContent = "🍽️🎉";
+          impostorFeedbackTitle.textContent = "¡Mesa Ganadora!";
+          impostorFeedbackPts.textContent = "+500 pts";
+          impostorFeedbackPts.style.color = "var(--success)";
+        } else {
+          impostorFeedbackIcon.textContent = "🍽️❌";
+          impostorFeedbackTitle.textContent = "Mesa Incorrecta";
+          impostorFeedbackPts.textContent = "0 pts";
+          impostorFeedbackPts.style.color = "var(--danger)";
+        }
+      } else {
+        // Individual Mode
+        const isCorrect = chosenIdx === correctIdx;
+        
+        if (chosenIdx === null) {
+          impostorFeedbackIcon.textContent = "⌛";
+          impostorFeedbackTitle.textContent = "¡Tiempo agotado!";
+          impostorFeedbackPts.textContent = "0 pts";
+          impostorFeedbackPts.style.color = "var(--danger)";
+        } else if (isCorrect) {
+          impostorFeedbackIcon.textContent = "🎉";
+          impostorFeedbackTitle.textContent = "¡Correcto!";
+          impostorFeedbackPts.textContent = "¡Puntos Sumados!";
+          impostorFeedbackPts.style.color = "var(--success)";
+        } else {
+          impostorFeedbackIcon.textContent = "❌";
+          impostorFeedbackTitle.textContent = "¡Incorrecto!";
+          impostorFeedbackPts.textContent = "0 pts";
+          impostorFeedbackPts.style.color = "var(--danger)";
+        }
+      }
+
+      // Populate explanation text
+      if (data.round && data.round.options) {
+        impostorCorrectOptionText.textContent = data.round.options[correctIdx];
+      }
+    } else {
+      // Question Active, needs to answer!
+      impostorQuestionActiveSection.classList.remove("hidden");
+      impostorQText.textContent = data.round.question;
+
+      // Handle Table Mode Consensus box
+      if (data.mode === 'mesa') {
+        impostorTableConsensusBox.classList.remove("hidden");
+        impostorMyTableNum.textContent = data.myTableNumber || "-";
+        
+        impostorTableVotesTally.innerHTML = "";
+        data.round.options.forEach((opt, idx) => {
+          const votesCount = data.tableVotes ? (data.tableVotes[idx] || 0) : 0;
+          if (votesCount > 0) {
+            const voteRow = document.createElement("div");
+            voteRow.style = "display: flex; justify-content: space-between; padding: 2px 0;";
+            const label = votesCount === 1 ? "voto" : "votos";
+            voteRow.innerHTML = `
+              <span style="color: var(--text-secondary);">${idx + 1}. ${opt}:</span>
+              <span style="color: var(--accent-gold); font-weight: 800;">${votesCount} ${label}</span>
+            `;
+            impostorTableVotesTally.appendChild(voteRow);
+          }
+        });
+        
+        if (impostorTableVotesTally.innerHTML === "") {
+          impostorTableVotesTally.innerHTML = '<span style="color: var(--text-secondary); font-style: italic;">Nadie en la mesa votó todavía. ¡Hablen y decidan!</span>';
+        }
+      } else {
+        impostorTableConsensusBox.classList.add("hidden");
+      }
+
+      // Populate options grid
+      impostorOptionsGrid.innerHTML = "";
+      data.round.options.forEach((opt, idx) => {
+        const btn = document.createElement("button");
+        btn.className = "btn-secondary";
+        btn.style = "text-align: left; justify-content: flex-start; padding: 14px 18px; width: 100%; font-size: 0.9rem; margin-top: 0; position: relative;";
+        
+        const isChosen = data.myVote === idx;
+        
+        btn.innerHTML = `<span style="color: var(--accent-gold); font-weight: 800; margin-right: 10px;">${idx + 1}.</span> ${opt}`;
+        
+        if (isChosen) {
+          btn.style.borderColor = "var(--accent-gold)";
+          btn.style.background = "rgba(226, 192, 116, 0.1)";
+        }
+
+        btn.addEventListener("click", () => {
+          const allBtns = impostorOptionsGrid.querySelectorAll("button");
+          allBtns.forEach(b => {
+            b.style.borderColor = "";
+            b.style.background = "";
+          });
+          
+          btn.style.borderColor = "var(--accent-gold)";
+          btn.style.background = "rgba(226, 192, 116, 0.1)";
+
+          socket.emit("impostor:submit_vote", {
+            roundIndex: currentRoundIndexLocal,
+            answerIndex: idx
+          });
+        });
+        impostorOptionsGrid.appendChild(btn);
+      });
+
+      // Start the local progress timer ticking down
+      startImpostorTimer(data.roundStartTime, data.round.timeLimit, () => {
+        const allBtns = impostorOptionsGrid.querySelectorAll("button");
+        allBtns.forEach(b => b.disabled = true);
+      });
+    }
+  }
+});
+
+// Socket: Receive Game Over event
+socket.on("impostor:game_over", (data) => {
+  console.log("Client Impostor Game Over. Standings received:", data);
+  if (!currentUser) return;
+
+  stopImpostorTimer();
+
+  // Hide all sections
+  impostorWaitingSection.classList.add("hidden");
+  impostorQuestionActiveSection.classList.add("hidden");
+  impostorFeedbackSection.classList.add("hidden");
+  impostorGameOverSection.classList.remove("hidden");
+
+  const isTableMode = data.tableLeaderboard && data.tableLeaderboard.length > 0;
+  
+  if (isTableMode) {
+    impostorLeaderboardTitle.textContent = "Mesas Ganadoras 🍽️🏆";
+    
+    const myTableNum = currentUser.tableNumber;
+    const myTableEntry = data.tableLeaderboard.find(entry => entry.tableNumber === myTableNum);
+    impostorFinalScore.textContent = myTableEntry ? myTableEntry.score : 0;
+    
+    impostorClientLeaderboard.innerHTML = "";
+    data.tableLeaderboard.forEach((entry, idx) => {
+      const row = document.createElement("div");
+      row.style = "display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; background: rgba(255,255,255,0.02); border-radius: 6px; font-size: 0.85rem; border: 1px solid rgba(255,255,255,0.03);";
+      
+      const isMyTable = entry.tableNumber === myTableNum;
+      if (isMyTable) {
+        row.style.borderColor = "var(--accent-gold)";
+        row.style.background = "rgba(226, 192, 116, 0.05)";
+      }
+
+      const tableText = isMyTable ? `Mesa ${entry.tableNumber} (Tu Mesa)` : `Mesa ${entry.tableNumber}`;
+      const rankPrefix = idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : `${idx + 1}.`;
+
+      row.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-weight: 800; min-width: 20px;">${rankPrefix}</span>
+          <span style="${isMyTable ? 'font-weight: 800; color: var(--accent-gold);' : 'font-weight: 500;'}">${tableText}</span>
+        </div>
+        <span style="font-weight: 800; color: var(--accent-gold);">${entry.score} pts</span>
+      `;
+      impostorClientLeaderboard.appendChild(row);
+    });
+  } else {
+    impostorLeaderboardTitle.textContent = "Tabla de Posiciones 🏆";
+    
+    const myRankEntry = data.leaderboard.find(entry => entry.userId === currentUser.userId);
+    impostorFinalScore.textContent = myRankEntry ? myRankEntry.score : 0;
+    
+    impostorClientLeaderboard.innerHTML = "";
+    if (data.leaderboard.length === 0) {
+      impostorClientLeaderboard.innerHTML = "<p style='color: var(--text-secondary); font-style: italic; font-size: 0.8rem;'>Nadie participó aún...</p>";
+      return;
+    }
+
+    data.leaderboard.slice(0, 10).forEach((entry, idx) => {
+      const row = document.createElement("div");
+      row.style = "display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; background: rgba(255,255,255,0.02); border-radius: 6px; font-size: 0.85rem; border: 1px solid rgba(255,255,255,0.03);";
+      
+      const isMe = entry.userId === currentUser.userId;
+      if (isMe) {
+        row.style.borderColor = "var(--accent-gold)";
+        row.style.background = "rgba(226, 192, 116, 0.05)";
+      }
+
+      const nameText = isMe ? `${entry.name} (Tú)` : entry.name;
+      const rankPrefix = idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : `${idx + 1}.`;
+
+      row.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-weight: 800; min-width: 20px;">${rankPrefix}</span>
+          <span style="${isMe ? 'font-weight: 800; color: var(--accent-gold);' : 'font-weight: 500;'}">${nameText} (Mesa ${entry.tableNumber || "-"})</span>
+        </div>
+        <span style="font-weight: 800; color: var(--accent-gold);">${entry.score} pts</span>
+      `;
+      impostorClientLeaderboard.appendChild(row);
+    });
+  }
+});
+
