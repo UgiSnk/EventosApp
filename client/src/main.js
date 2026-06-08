@@ -371,7 +371,14 @@ function renderActiveModule() {
     const enterBtn = document.getElementById("btn-enter-module");
     if (enterBtn) {
       enterBtn.addEventListener("click", () => {
-        alert(`Entrando a: ${getModuleDisplayName(activeModule)} (Próximamente en las siguientes fases!)`);
+        if (activeModule === 'trivia') {
+          document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+          document.getElementById("screen-trivia").classList.add("active");
+          navButtons.forEach(b => b.classList.remove("active"));
+          socket.emit("trivia:request_sync");
+        } else {
+          alert(`Entrando a: ${getModuleDisplayName(activeModule)} (Próximamente en las siguientes fases!)`);
+        }
       });
     }
   }
@@ -777,6 +784,248 @@ socket.on("admin:reset_forced", () => {
   matchPopup.classList.add("hidden");
   countdownModal.classList.add("hidden");
   clearInterval(countdownInterval);
+  clearInterval(triviaTimerInterval);
   
   alert("El evento se ha cerrado o reiniciado. Tu sesión efímera ha expirado.");
+});
+
+/* --- Timed Trivia Client Module --- */
+
+// DOM Elements
+const screenTrivia = document.getElementById("screen-trivia");
+const btnExitTrivia = document.getElementById("btn-exit-trivia");
+const triviaCurrentQNum = document.getElementById("trivia-current-q-num");
+const triviaTotalQNum = document.getElementById("trivia-total-q-num");
+const triviaMyScore = document.getElementById("trivia-my-score");
+const triviaTimerBar = document.getElementById("trivia-timer-bar");
+
+const triviaWaitingSection = document.getElementById("trivia-waiting");
+const triviaQuestionActiveSection = document.getElementById("trivia-question-active");
+const triviaQText = document.getElementById("trivia-q-text");
+const triviaOptionsGrid = document.getElementById("trivia-options-grid");
+
+const triviaSubmittedSection = document.getElementById("trivia-submitted");
+
+const triviaFeedbackSection = document.getElementById("trivia-feedback");
+const triviaFeedbackIcon = document.getElementById("trivia-feedback-icon");
+const triviaFeedbackTitle = document.getElementById("trivia-feedback-title");
+const triviaFeedbackPts = document.getElementById("trivia-feedback-pts");
+const triviaCorrectOptionText = document.getElementById("trivia-correct-option-text");
+
+const triviaGameOverSection = document.getElementById("trivia-game-over");
+const triviaFinalScore = document.getElementById("trivia-final-score");
+const triviaClientLeaderboard = document.getElementById("trivia-client-leaderboard");
+
+let triviaTimerInterval = null;
+let currentQuestionIndexLocal = -1;
+
+// Exit Trivia button handler
+btnExitTrivia.addEventListener("click", () => {
+  screenTrivia.classList.remove("active");
+  lobbyScreen.classList.add("active");
+  
+  // Highlight Lobby nav button
+  navButtons.forEach(btn => {
+    if (btn.getAttribute("data-screen") === "lobby") {
+      btn.classList.add("active");
+    } else {
+      btn.classList.remove("active");
+    }
+  });
+});
+
+// Helper to start the ticking visual bar desync-free
+function startTriviaTimer(startTimeMs, limitSeconds, onTimeout) {
+  clearInterval(triviaTimerInterval);
+  if (!triviaTimerBar) return;
+
+  const totalMs = limitSeconds * 1000;
+  
+  const updateTimer = () => {
+    const elapsedMs = Date.now() - startTimeMs;
+    const remainingPct = Math.max(0, 100 - (elapsedMs / totalMs) * 100);
+    triviaTimerBar.style.width = `${remainingPct}%`;
+
+    if (elapsedMs >= totalMs) {
+      clearInterval(triviaTimerInterval);
+      triviaTimerBar.style.width = "0%";
+      if (onTimeout) onTimeout();
+    }
+  };
+
+  updateTimer();
+  triviaTimerInterval = setInterval(updateTimer, 100);
+}
+
+function stopTriviaTimer() {
+  clearInterval(triviaTimerInterval);
+  if (triviaTimerBar) triviaTimerBar.style.width = "100%";
+}
+
+// Socket: Receive Trivia state desync-free
+socket.on("trivia:state", (data) => {
+  console.log("Client Trivia state updated:", data);
+  
+  if (!currentUser) return;
+
+  // Sync scores
+  triviaMyScore.textContent = data.myTotalScore;
+  
+  // Toggle screens based on active question index
+  if (!data.active && data.currentQuestionIndex === -1) {
+    if (screenTrivia.classList.contains("active")) {
+      btnExitTrivia.click();
+    }
+    stopTriviaTimer();
+    return;
+  }
+
+  // Set totals
+  triviaTotalQNum.textContent = "10";
+
+  // Hide all sections inside trivia card first
+  triviaWaitingSection.classList.add("hidden");
+  triviaQuestionActiveSection.classList.add("hidden");
+  triviaSubmittedSection.classList.add("hidden");
+  triviaFeedbackSection.classList.add("hidden");
+  triviaGameOverSection.classList.add("hidden");
+
+  // Determine view based on state
+  if (data.currentQuestionIndex === -1) {
+    // Waiting to start
+    triviaWaitingSection.classList.remove("hidden");
+    stopTriviaTimer();
+  } else {
+    // Trivia is playing
+    triviaCurrentQNum.textContent = data.currentQuestionIndex + 1;
+    currentQuestionIndexLocal = data.currentQuestionIndex;
+
+    if (data.answerRevealed) {
+      // Correctness Reveal state
+      stopTriviaTimer();
+      triviaFeedbackSection.classList.remove("hidden");
+      
+      // Determine what index the user chose
+      const chosenIdx = data.myAnswer ? data.myAnswer.answerIndex : null;
+      const correctIdx = data.correctIndex;
+      const isCorrect = chosenIdx === correctIdx;
+      
+      if (chosenIdx === null) {
+        // Did not answer
+        triviaFeedbackIcon.textContent = "⌛";
+        triviaFeedbackTitle.textContent = "¡Tiempo agotado!";
+        triviaFeedbackPts.textContent = "0 pts";
+        triviaFeedbackPts.style.color = "var(--danger)";
+      } else if (isCorrect) {
+        // Correct
+        triviaFeedbackIcon.textContent = "🎉";
+        triviaFeedbackTitle.textContent = "¡Correcto!";
+        triviaFeedbackPts.textContent = `+${data.myAnswer.score} pts`;
+        triviaFeedbackPts.style.color = "var(--success)";
+      } else {
+        // Incorrect
+        triviaFeedbackIcon.textContent = "❌";
+        triviaFeedbackTitle.textContent = "¡Incorrecto!";
+        triviaFeedbackPts.textContent = "0 pts";
+        triviaFeedbackPts.style.color = "var(--danger)";
+      }
+
+      // Populate explanation text
+      if (data.question && data.question.options) {
+        triviaCorrectOptionText.textContent = data.question.options[correctIdx];
+      }
+    } else if (data.myAnswer !== null) {
+      // Already answered, waiting for other players
+      stopTriviaTimer();
+      triviaSubmittedSection.classList.remove("hidden");
+    } else {
+      // Question Active, needs to answer!
+      triviaQuestionActiveSection.classList.remove("hidden");
+      triviaQText.textContent = data.question.question;
+
+      // Populate options grid
+      triviaOptionsGrid.innerHTML = "";
+      data.question.options.forEach((opt, idx) => {
+        const btn = document.createElement("button");
+        btn.className = "btn-secondary";
+        btn.style = "text-align: left; justify-content: flex-start; padding: 14px 18px; width: 100%; font-size: 0.9rem; margin-top: 0;";
+        btn.innerHTML = `<span style="color: var(--accent-gold); font-weight: 800; margin-right: 10px;">${idx + 1}.</span> ${opt}`;
+        
+        btn.addEventListener("click", () => {
+          const allBtns = triviaOptionsGrid.querySelectorAll("button");
+          allBtns.forEach(b => {
+            b.disabled = true;
+            b.style.opacity = "0.5";
+          });
+          
+          btn.style.opacity = "1";
+          btn.style.borderColor = "var(--accent-gold)";
+          btn.style.background = "rgba(226, 192, 116, 0.1)";
+
+          // Submit answer to server
+          socket.emit("trivia:submit_answer", {
+            questionIndex: currentQuestionIndexLocal,
+            answerIndex: idx
+          });
+        });
+        triviaOptionsGrid.appendChild(btn);
+      });
+
+      // Start the local progress timer ticking down
+      startTriviaTimer(data.questionStartTime, data.question.timeLimit, () => {
+        const allBtns = triviaOptionsGrid.querySelectorAll("button");
+        allBtns.forEach(b => b.disabled = true);
+      });
+    }
+  }
+});
+
+// Socket: Receive Game Over event
+socket.on("trivia:game_over", (data) => {
+  console.log("Client Trivia Game Over. Leaderboard received:", data);
+  if (!currentUser) return;
+
+  stopTriviaTimer();
+
+  // Hide all trivia card sections
+  triviaWaitingSection.classList.add("hidden");
+  triviaQuestionActiveSection.classList.add("hidden");
+  triviaSubmittedSection.classList.add("hidden");
+  triviaFeedbackSection.classList.add("hidden");
+  triviaGameOverSection.classList.remove("hidden");
+
+  // Show final points
+  const leaderboard = data.leaderboard || [];
+  const myRankEntry = leaderboard.find(entry => entry.userId === currentUser.userId);
+  triviaFinalScore.textContent = myRankEntry ? myRankEntry.score : 0;
+
+  // Render Leaderboard table list
+  triviaClientLeaderboard.innerHTML = "";
+  if (leaderboard.length === 0) {
+    triviaClientLeaderboard.innerHTML = "<p style='color: var(--text-secondary); font-style: italic; font-size: 0.8rem;'>Nadie participó aún...</p>";
+    return;
+  }
+
+  leaderboard.slice(0, 10).forEach((entry, idx) => {
+    const row = document.createElement("div");
+    row.style = "display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; background: rgba(255,255,255,0.02); border-radius: 6px; font-size: 0.85rem; border: 1px solid rgba(255,255,255,0.03);";
+    
+    const isMe = entry.userId === currentUser.userId;
+    if (isMe) {
+      row.style.borderColor = "var(--accent-gold)";
+      row.style.background = "rgba(226, 192, 116, 0.05)";
+    }
+
+    const nameText = isMe ? `${entry.name} (Tú)` : entry.name;
+    const rankPrefix = idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : `${idx + 1}.`;
+
+    row.innerHTML = `
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span style="font-weight: 800; min-width: 20px;">${rankPrefix}</span>
+        <span style="${isMe ? 'font-weight: 800; color: var(--accent-gold);' : 'font-weight: 500;'}">${nameText}</span>
+      </div>
+      <span style="font-weight: 800; color: var(--accent-gold);">${entry.score} pts</span>
+    `;
+    triviaClientLeaderboard.appendChild(row);
+  });
 });

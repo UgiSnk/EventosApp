@@ -245,6 +245,49 @@
             <button id="btn-trigger-countdown" class="btn-primary" style="margin-top: 0;">Disparar Alerta Global</button>
           </div>
 
+          <!-- Trivia control panel (Visible only when trivia module is active) -->
+          <div id="admin-trivia-card" class="glass-card hidden" style="margin-bottom: 20px;">
+            <h3 style="font-family: var(--font-title); margin-bottom: 12px; color: var(--accent-gold);">🧠 Control Trivia Flash</h3>
+            
+            <!-- Not started state -->
+            <div id="admin-trivia-not-started">
+              <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 14px; line-height: 1.4;">
+                La Trivia está configurada con 10 preguntas. Los invitados verán una pantalla de espera hasta que la inicies.
+              </p>
+              <button id="btn-admin-trivia-start" class="btn-primary" style="margin-top: 0; width: 100%;">Iniciar Trivia 🚀</button>
+            </div>
+            
+            <!-- Active state -->
+            <div id="admin-trivia-active" class="hidden">
+              <div class="trivia-question-info" style="background: rgba(255, 255, 255, 0.02); padding: 12px; border-radius: 8px; margin-bottom: 14px; border: 1px solid rgba(255,255,255,0.05);">
+                <div style="font-size: 0.7rem; color: var(--accent-gold); text-transform: uppercase; font-weight: 800; margin-bottom: 4px; letter-spacing: 0.5px;">Pregunta Actual (<span id="admin-trivia-q-num">1/10</span>)</div>
+                <div id="admin-trivia-q-text" style="font-family: var(--font-title); font-weight: 600; font-size: 0.95rem; line-height: 1.3;">¿Pregunta?</div>
+              </div>
+              
+              <div class="trivia-stats-summary" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; text-align: center;">
+                <div style="background: rgba(255, 255, 255, 0.02); padding: 8px 4px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.03);">
+                  <div id="admin-trivia-answered-count" style="font-size: 1.3rem; font-weight: 800; color: var(--accent-gold);">0</div>
+                  <div style="font-size: 0.6rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.3px;">Respondieron</div>
+                </div>
+                <div style="background: rgba(255, 255, 255, 0.02); padding: 8px 4px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.03);">
+                  <div id="admin-trivia-total-players" style="font-size: 1.3rem; font-weight: 800; color: white;">0</div>
+                  <div style="font-size: 0.6rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.3px;">Jugadores</div>
+                </div>
+              </div>
+
+              <!-- Option distribution stats -->
+              <div id="admin-trivia-options-stats" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px;">
+                <!-- Filled dynamically -->
+              </div>
+              
+              <div style="display: flex; flex-direction: column; gap: 8px;">
+                <button id="btn-admin-trivia-reveal" class="btn-primary" style="margin-top: 0; width: 100%; background: var(--success); color: white;">Revelar Respuesta Correcta 🎯</button>
+                <button id="btn-admin-trivia-next" class="btn-secondary hidden" style="margin-top: 0; width: 100%;">Siguiente Pregunta ➡️</button>
+                <button id="btn-admin-trivia-end" class="btn-danger hidden" style="margin-top: 0; width: 100%;">Finalizar y Mostrar Podio 🏆</button>
+              </div>
+            </div>
+          </div>
+
           <!-- Danger Zone Reset (Ephemeral Day Reset) -->
           <div class="glass-card danger-zone">
             <h3 style="font-family: var(--font-title); margin-bottom: 8px;">Zona de Peligro</h3>
@@ -306,6 +349,57 @@
 
       </div>
     </main>
+  </div>
+
+  <!-- Full-screen Podium Modal -->
+  <div id="admin-podium-modal" class="popup-modal hidden">
+    <div class="glass-card podium-modal-card" style="max-width: 500px; width: 90%; text-align: center; padding: 30px 20px; position: relative;">
+      <h2 style="font-family: var(--font-title); font-size: 2rem; font-weight: 800; margin-bottom: 24px; color: var(--accent-gold); text-shadow: 0 0 10px rgba(226, 192, 116, 0.3);">🏆 PODIO TRIVIA 🏆</h2>
+      
+      <!-- Pedestals Container -->
+      <div class="podium-container" style="display: flex; align-items: flex-end; justify-content: center; gap: 12px; margin: 30px 0 10px; min-height: 220px;">
+        
+        <!-- 2nd Place -->
+        <div class="podium-column column-2nd" style="flex: 1; display: flex; flex-direction: column; align-items: center;">
+          <div id="podium-2-avatar-container" class="podium-avatar-wrapper" style="margin-bottom: 8px; position: relative;">
+            <!-- Filled dynamically -->
+          </div>
+          <div class="podium-pedestal pedestal-2nd" style="width: 100%; height: 80px; background: linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.01) 100%); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px 8px 0 0; display: flex; flex-direction: column; justify-content: center; align-items: center;">
+            <span style="font-size: 1.5rem; font-weight: 800; color: #a1a1a1;">2</span>
+            <span id="podium-2-name" style="font-size: 0.75rem; font-weight: 600; width: 90%; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; display: block; text-align: center;">-</span>
+            <span id="podium-2-score" style="font-size: 0.7rem; color: var(--accent-gold); font-weight: 800;">0 pts</span>
+          </div>
+        </div>
+        
+        <!-- 1st Place -->
+        <div class="podium-column column-1st" style="flex: 1.1; display: flex; flex-direction: column; align-items: center; position: relative; top: -12px;">
+          <div style="position: absolute; top: -25px; font-size: 1.5rem;">👑</div>
+          <div id="podium-1-avatar-container" class="podium-avatar-wrapper" style="margin-bottom: 8px; position: relative;">
+            <!-- Filled dynamically -->
+          </div>
+          <div class="podium-pedestal pedestal-1st" style="width: 100%; height: 110px; background: linear-gradient(180deg, rgba(226, 192, 116, 0.2) 0%, rgba(226, 192, 116, 0.03) 100%); border: 1px solid var(--accent-gold); border-radius: 8px 8px 0 0; display: flex; flex-direction: column; justify-content: center; align-items: center; box-shadow: 0 5px 15px rgba(226, 192, 116, 0.15);">
+            <span style="font-size: 1.8rem; font-weight: 800; color: var(--accent-gold);">1</span>
+            <span id="podium-1-name" style="font-size: 0.85rem; font-weight: 800; width: 90%; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; display: block; text-align: center;">-</span>
+            <span id="podium-1-score" style="font-size: 0.75rem; color: var(--accent-gold); font-weight: 800;">0 pts</span>
+          </div>
+        </div>
+        
+        <!-- 3rd Place -->
+        <div class="podium-column column-3rd" style="flex: 1; display: flex; flex-direction: column; align-items: center;">
+          <div id="podium-3-avatar-container" class="podium-avatar-wrapper" style="margin-bottom: 8px; position: relative;">
+            <!-- Filled dynamically -->
+          </div>
+          <div class="podium-pedestal pedestal-3rd" style="width: 100%; height: 60px; background: linear-gradient(180deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.01) 100%); border: 1px solid rgba(255,255,255,0.07); border-radius: 8px 8px 0 0; display: flex; flex-direction: column; justify-content: center; align-items: center;">
+            <span style="font-size: 1.25rem; font-weight: 800; color: #cd7f32;">3</span>
+            <span id="podium-3-name" style="font-size: 0.7rem; font-weight: 600; width: 90%; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; display: block; text-align: center;">-</span>
+            <span id="podium-3-score" style="font-size: 0.65rem; color: var(--accent-gold); font-weight: 800;">0 pts</span>
+          </div>
+        </div>
+        
+      </div>
+      
+      <button id="btn-close-podium" class="btn-primary" style="margin-top: 15px; width: 100%;">Cerrar Podio</button>
+    </div>
   </div>
 
   <script type="module" src="/src/admin.js"></script>
