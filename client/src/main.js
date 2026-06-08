@@ -1,9 +1,10 @@
 import { io } from "socket.io-client";
 
 // Differentiate between local development and production URLs
-const SOCKET_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-  ? 'http://localhost:3000'
-  : window.location.origin;
+const SOCKET_URL = import.meta.env.VITE_SERVER_URL || 
+  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    ? 'http://localhost:3000'
+    : window.location.origin);
 
 console.log(`Connecting to real-time server at: ${SOCKET_URL}`);
 const socket = io(SOCKET_URL);
