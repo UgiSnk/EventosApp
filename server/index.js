@@ -37,7 +37,8 @@ const state = {
     misionesFlash: { active: false }
   },
   users: {},         // Registered users: { [userId]: { userId, socketId, name, avatar, isSingle, likes: [], matches: [], segmentAnswers, connected, disconnectTimeout } }
-  socketToUser: {}   // Socket ID map: { [socketId]: userId }
+  socketToUser: {},  // Socket ID map: { [socketId]: userId }
+  chats: {}          // Chat message histories: { [chatId]: [ { senderId, message, timestamp } ] }
 };
 
 // Helper to generate unique ID
@@ -146,6 +147,74 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Get active matches details
+  socket.on('love:get_matches', () => {
+    const userId = state.socketToUser[socket.id];
+    const user = state.users[userId];
+    if (user && user.matches) {
+      const matchProfiles = user.matches
+        .map(mid => state.users[mid])
+        .filter(Boolean)
+        .map(u => ({
+          userId: u.userId,
+          name: u.name,
+          avatar: u.avatar,
+          segmentAnswers: u.segmentAnswers,
+          connected: u.connected
+        }));
+      socket.emit('love:matches', matchProfiles);
+    }
+  });
+
+  // Handle private chat messages between matches
+  socket.on('chat:send_message', ({ targetUserId, message }) => {
+    const userId = state.socketToUser[socket.id];
+    const requester = state.users[userId];
+    const target = state.users[targetUserId];
+
+    if (requester && target) {
+      // Security check: ensure they are matched
+      if (requester.matches.includes(targetUserId)) {
+        const chatId = [userId, targetUserId].sort().join('_');
+        state.chats[chatId] = state.chats[chatId] || [];
+        
+        const messageObj = {
+          senderId: userId,
+          message: message.trim(),
+          timestamp: new Date()
+        };
+        
+        state.chats[chatId].push(messageObj);
+        
+        console.log(`[CHAT] Message from ${requester.name} to ${target.name}: "${message.substring(0, 30)}"`);
+
+        // Emit message to target if connected
+        if (target.connected && target.socketId) {
+          io.to(target.socketId).emit('chat:message', {
+            senderId: userId,
+            message: message.trim(),
+            timestamp: messageObj.timestamp
+          });
+        }
+        
+        // Echo back to sender to confirm receipt
+        socket.emit('chat:message', {
+          senderId: userId,
+          message: message.trim(),
+          timestamp: messageObj.timestamp
+        });
+      }
+    }
+  });
+
+  // Get chat history
+  socket.on('chat:get_history', ({ targetUserId }) => {
+    const userId = state.socketToUser[socket.id];
+    const chatId = [userId, targetUserId].sort().join('_');
+    const history = state.chats[chatId] || [];
+    socket.emit('chat:history', { targetUserId, history });
+  });
+
   // Admin Module Control
   socket.on('admin:activate_module', (moduleName) => {
     if (state.modules[moduleName]) {
@@ -180,6 +249,7 @@ io.on('connection', (socket) => {
 
     state.users = {};
     state.socketToUser = {};
+    state.chats = {};
     state.activeModule = 'loveMatch';
     Object.keys(state.modules).forEach((key) => {
       state.modules[key].active = (key === 'loveMatch');

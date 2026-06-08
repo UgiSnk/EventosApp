@@ -103,9 +103,31 @@
           <div class="glass-card">
             <h2>Solteros en el Salón 💘</h2>
             <p class="subtitle">Deslizá o dale like para buscar coincidencia recíproca.</p>
+            
+            <!-- Team Filters -->
+            <div class="filter-controls">
+              <button type="button" class="btn-filter active" data-filter="all">Todos</button>
+              <button type="button" class="btn-filter" data-filter="Fernet">Team Fernet 🍹</button>
+              <button type="button" class="btn-filter" data-filter="Champagne">Team Champagne 🥂</button>
+            </div>
+
             <div id="profile-deck" class="profile-deck">
               <!-- Profiles will be loaded dynamically -->
               <p class="no-profiles">No hay otros solteros registrados aún...</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Matches & Chats Screen -->
+      <section id="screen-chats" class="screen">
+        <div class="chats-container">
+          <div class="glass-card">
+            <h2>Mis Matches 💬</h2>
+            <p class="subtitle">Toca a tu Match para ver el reto o conversar en privado.</p>
+            <div id="matches-list" class="matches-list">
+              <!-- Matches list will be loaded dynamically -->
+              <p class="no-matches">Aún no tenés matches... ¡Salí a buscar likes! 💘</p>
             </div>
           </div>
         </div>
@@ -143,6 +165,32 @@
       </div>
     </div>
 
+    <!-- Private Chat Panel (Slide-Over overlay) -->
+    <div id="private-chat-panel" class="chat-panel hidden">
+      <div class="chat-panel-header">
+        <button id="btn-close-chat" class="btn-back">←</button>
+        <div class="chat-target-profile">
+          <img id="chat-target-avatar" class="chat-avatar-small hidden" src="" alt="Avatar">
+          <div id="chat-target-avatar-placeholder" class="chat-avatar-small-placeholder">T</div>
+          <span id="chat-target-name">Nombre</span>
+        </div>
+      </div>
+      
+      <div class="chat-challenge-banner">
+        <strong>Reto Match:</strong>
+        <span id="chat-challenge-desc">Brindar en la barra!</span>
+      </div>
+      
+      <div id="chat-messages-container" class="chat-messages">
+        <!-- Messages will load here -->
+      </div>
+      
+      <form id="form-chat-send" class="chat-send-form">
+        <input type="text" id="input-chat-message" placeholder="Escribí un mensaje..." autocomplete="off" required>
+        <button type="submit" class="btn-send">Enviar</button>
+      </form>
+    </div>
+
     <!-- Navigation bar (Visible after onboarding) -->
     <nav class="app-nav hidden">
       <button class="nav-btn active" data-screen="lobby">
@@ -152,6 +200,10 @@
       <button class="nav-btn" data-screen="match">
         <span class="nav-icon">💘</span>
         <span class="nav-label">Love Match</span>
+      </button>
+      <button class="nav-btn" data-screen="chats">
+        <span class="nav-icon">💬</span>
+        <span class="nav-label">Matches</span>
       </button>
     </nav>
   </div>
