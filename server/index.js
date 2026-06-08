@@ -234,9 +234,12 @@ const broadcastTriviaState = () => {
 // Helper to generate unique ID
 const generateUserId = () => Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
 
-// Get clean list of users for clients (excluding private timeouts and disconnected if required)
+// Cache for disconnect timeouts to avoid serializing Node Timer structures
+const disconnectTimeouts = {};
+
+// Get clean list of users for clients
 const getActiveUserList = () => {
-  return Object.values(state.users).map(({ disconnectTimeout, ...user }) => user);
+  return Object.values(state.users);
 };
 
 io.on('connection', (socket) => {
@@ -277,9 +280,9 @@ io.on('connection', (socket) => {
     
     if (user) {
       // Clear disconnect cleanup timeout if it exists
-      if (user.disconnectTimeout) {
-        clearTimeout(user.disconnectTimeout);
-        user.disconnectTimeout = null;
+      if (disconnectTimeouts[userId]) {
+        clearTimeout(disconnectTimeouts[userId]);
+        delete disconnectTimeouts[userId];
       }
       
       // Update socket mapping
@@ -552,8 +555,9 @@ io.on('connection', (socket) => {
     console.log(`[ADMIN] Resetting event... Clearing all active user sessions!`);
     
     // Clear timeouts first to prevent delayed log updates
-    Object.values(state.users).forEach(user => {
-      if (user.disconnectTimeout) clearTimeout(user.disconnectTimeout);
+    Object.keys(disconnectTimeouts).forEach(uid => {
+      clearTimeout(disconnectTimeouts[uid]);
+      delete disconnectTimeouts[uid];
     });
 
     state.users = {};
@@ -599,9 +603,10 @@ io.on('connection', (socket) => {
         delete state.socketToUser[socket.id];
         
         // Wait 5 minutes before deleting the profile from memory
-        user.disconnectTimeout = setTimeout(() => {
+        disconnectTimeouts[userId] = setTimeout(() => {
           console.log(`Deleting expired user session: "${user.name}" (ID: ${userId})`);
           delete state.users[userId];
+          delete disconnectTimeouts[userId];
           io.emit('user:list_update', getActiveUserList());
         }, 300000); // 5 minutes
         
