@@ -930,18 +930,21 @@ socket.on("trivia:state", (data) => {
         triviaFeedbackTitle.textContent = "¡Tiempo agotado!";
         triviaFeedbackPts.textContent = "0 pts";
         triviaFeedbackPts.style.color = "var(--danger)";
+        playFeedbackAudio(false);
       } else if (isCorrect) {
         // Correct
         triviaFeedbackIcon.textContent = "🎉";
         triviaFeedbackTitle.textContent = "¡Correcto!";
         triviaFeedbackPts.textContent = `+${data.myAnswer.score} pts`;
         triviaFeedbackPts.style.color = "var(--success)";
+        playFeedbackAudio(true);
       } else {
         // Incorrect
         triviaFeedbackIcon.textContent = "❌";
         triviaFeedbackTitle.textContent = "¡Incorrecto!";
         triviaFeedbackPts.textContent = "0 pts";
         triviaFeedbackPts.style.color = "var(--danger)";
+        playFeedbackAudio(false);
       }
 
       // Populate explanation text
@@ -1062,6 +1065,8 @@ socket.on("trivia:game_over", (data) => {
     return;
   }
 
+  let wonTop3 = false;
+
   leaderboard.slice(0, 10).forEach((entry, idx) => {
     const row = document.createElement("div");
     row.style = "display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; background: rgba(255,255,255,0.02); border-radius: 6px; font-size: 0.85rem; border: 1px solid rgba(255,255,255,0.03);";
@@ -1070,6 +1075,7 @@ socket.on("trivia:game_over", (data) => {
     if (isMe) {
       row.style.borderColor = "var(--accent-gold)";
       row.style.background = "rgba(226, 192, 116, 0.05)";
+      if (idx < 3) wonTop3 = true;
     }
 
     const nameText = isMe ? `${entry.name} (Tú)` : entry.name;
@@ -1084,6 +1090,10 @@ socket.on("trivia:game_over", (data) => {
     `;
     triviaClientLeaderboard.appendChild(row);
   });
+
+  if (wonTop3) {
+    triggerConfettiAnimation();
+  }
 });
 
 
@@ -1648,4 +1658,89 @@ socket.on("misiones:state", (data) => {
     misionesSuccessView.classList.add("hidden");
   }
 });
+
+// Helper to trigger Confetti particles fallback-safe
+function triggerConfettiAnimation() {
+  let container = document.querySelector(".confetti-container");
+  if (!container) {
+    container = document.createElement("div");
+    container.className = "confetti-container";
+    document.getElementById("app").appendChild(container);
+  }
+
+  const colors = ["#e2c074", "#ff007f", "#8a2be2", "#39e3a6", "#ff4a5a", "#ffffff"];
+  for (let i = 0; i < 60; i++) {
+    const particle = document.createElement("div");
+    particle.className = "confetti-particle";
+    
+    // Randomize properties
+    const left = Math.random() * 100; // in %
+    const delay = Math.random() * 2; // in seconds
+    const duration = 2 + Math.random() * 2; // in seconds
+    const size = 5 + Math.random() * 8; // in px
+    const color = colors[Math.floor(Math.random() * colors.length)];
+    
+    particle.style.left = `${left}%`;
+    particle.style.animationDelay = `${delay}s`;
+    particle.style.animationDuration = `${duration}s`;
+    particle.style.width = `${size}px`;
+    particle.style.height = `${size}px`;
+    particle.style.backgroundColor = color;
+    
+    container.appendChild(particle);
+    
+    // Cleanup
+    setTimeout(() => {
+      particle.remove();
+    }, (delay + duration) * 1000);
+  }
+}
+
+// Helper to play synthesized trivia sounds via Web Audio API without needing external asset loads
+function playFeedbackAudio(isCorrectAnswer) {
+  try {
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    
+    if (isCorrectAnswer) {
+      // Synthesize a retro "winning/correct chime" (ascending major arpeggio)
+      const notes = [261.63, 329.63, 392.00, 523.25]; // C4, E4, G4, C5
+      notes.forEach((freq, idx) => {
+        const osc = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+        
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime + idx * 0.1);
+        
+        gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime + idx * 0.1);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + idx * 0.1 + 0.3);
+        
+        osc.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        
+        osc.start(audioCtx.currentTime + idx * 0.1);
+        osc.stop(audioCtx.currentTime + idx * 0.1 + 0.3);
+      });
+    } else {
+      // Synthesize a retro "incorrect buzzer" (descending buzz)
+      const osc = audioCtx.createOscillator();
+      const gainNode = audioCtx.createGain();
+      
+      osc.type = "sawtooth";
+      osc.frequency.setValueAtTime(120, audioCtx.currentTime);
+      osc.frequency.linearRampToValueAtTime(70, audioCtx.currentTime + 0.45);
+      
+      gainNode.gain.setValueAtTime(0.12, audioCtx.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.45);
+      
+      osc.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+      
+      osc.start(audioCtx.currentTime);
+      osc.stop(audioCtx.currentTime + 0.45);
+    }
+  } catch (err) {
+    console.warn("AudioContext synthesis failed/not allowed by browser autoplay policy:", err);
+  }
+}
+
 
