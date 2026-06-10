@@ -883,7 +883,7 @@ socket.on("trivia:state", (data) => {
   triviaMyScore.textContent = data.myTotalScore;
   
   // Toggle screens based on active question index
-  if (!data.active && data.currentQuestionIndex === -1) {
+  if (!data.active && !data.gameOver && data.currentQuestionIndex === -1) {
     if (screenTrivia.classList.contains("active")) {
       btnExitTrivia.click();
     }
@@ -902,7 +902,10 @@ socket.on("trivia:state", (data) => {
   triviaGameOverSection.classList.add("hidden");
 
   // Determine view based on state
-  if (data.currentQuestionIndex === -1) {
+  if (data.gameOver) {
+    triviaGameOverSection.classList.remove("hidden");
+    stopTriviaTimer();
+  } else if (data.currentQuestionIndex === -1) {
     // Waiting to start
     triviaWaitingSection.classList.remove("hidden");
     stopTriviaTimer();

@@ -156,6 +156,7 @@ const state = {
     currentQuestionIndex: -1,
     questionStartTime: null,
     answerRevealed: false,
+    gameOver: false,
     answers: {},     // { [userId]: { [questionIndex]: { answerIndex, score, timeTaken } } }
     scores: {},      // { [userId]: totalScore }
     questions: triviaQuestions
@@ -233,6 +234,7 @@ const getTriviaStateForUser = (userId) => {
 
   return {
     active: state.trivia.active,
+    gameOver: state.trivia.gameOver,
     currentQuestionIndex: currentIdx,
     question: cleanQuestion,
     questionStartTime: state.trivia.questionStartTime,
@@ -695,6 +697,7 @@ io.on('connection', (socket) => {
   
   socket.on('admin:trivia_start', () => {
     state.trivia.active = true;
+    state.trivia.gameOver = false;
     state.trivia.currentQuestionIndex = 0;
     state.trivia.questionStartTime = Date.now();
     state.trivia.answerRevealed = false;
@@ -730,6 +733,7 @@ io.on('connection', (socket) => {
 
   socket.on('admin:trivia_end', () => {
     state.trivia.active = false;
+    state.trivia.gameOver = true;
     console.log(`[TRIVIA] Game ended by Admin.`);
     
     const leaderboard = getLeaderboard();
