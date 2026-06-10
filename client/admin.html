@@ -255,6 +255,7 @@
                 La Trivia está configurada con 10 preguntas. Los invitados verán una pantalla de espera hasta que la inicies.
               </p>
               <button id="btn-admin-trivia-start" class="btn-primary" style="margin-top: 0; width: 100%;">Iniciar Trivia 🚀</button>
+              <button id="btn-admin-trivia-edit" class="btn-secondary" style="margin-top: 8px; width: 100%; border-color: var(--accent-gold); color: var(--accent-gold);">Configurar Preguntas ⚙️</button>
             </div>
             
             <!-- Active state -->
@@ -524,6 +525,25 @@
           <h3 id="projection-mision-title" style="font-family: var(--font-title); font-size: 1.8rem; color: var(--accent-gold); font-weight: 800; text-shadow: 0 0 10px rgba(226, 192, 116, 0.2);">Misión</h3>
           <p id="projection-author" style="font-size: 1.3rem; margin-top: 4px; font-weight: 600; color: white;">Subido por Romeo (Mesa 3)</p>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Questions Editor Modal -->
+  <div id="admin-trivia-edit-modal" class="popup-modal hidden" style="z-index: 180;">
+    <div class="glass-card" style="max-width: 650px; width: 95%; max-height: 85vh; display: flex; flex-direction: column; padding: 24px; overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,0.5);">
+      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 12px; margin-bottom: 16px;">
+        <h2 style="font-family: var(--font-title); font-size: 1.5rem; font-weight: 800; color: var(--accent-gold); margin: 0;">Configurar Preguntas de Trivia</h2>
+        <button id="btn-close-trivia-edit" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.5rem; line-height: 1;">✕</button>
+      </div>
+
+      <div id="trivia-questions-editor-list" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 24px; padding-right: 6px; margin-bottom: 16px;">
+        <!-- Dynamically filled list of questions edit forms -->
+      </div>
+
+      <div style="display: flex; gap: 12px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 16px;">
+        <button id="btn-add-trivia-question" class="btn-secondary" style="margin: 0; flex: 1; border-color: var(--accent-gold); color: var(--accent-gold);">Agregar Pregunta ➕</button>
+        <button id="btn-save-trivia-questions" class="btn-primary" style="margin: 0; flex: 1.2; background: var(--success); color: white;">Guardar Cambios 💾</button>
       </div>
     </div>
   </div>

@@ -202,6 +202,16 @@ const adminTriviaOptionsStats = document.getElementById("admin-trivia-options-st
 const adminPodiumModal = document.getElementById("admin-podium-modal");
 const btnClosePodium = document.getElementById("btn-close-podium");
 
+// Questions Editor DOM Elements
+const btnAdminTriviaEdit = document.getElementById("btn-admin-trivia-edit");
+const adminTriviaEditModal = document.getElementById("admin-trivia-edit-modal");
+const btnCloseTriviaEdit = document.getElementById("btn-close-trivia-edit");
+const triviaQuestionsEditorList = document.getElementById("trivia-questions-editor-list");
+const btnAddTriviaQuestion = document.getElementById("btn-add-trivia-question");
+const btnSaveTriviaQuestions = document.getElementById("btn-save-trivia-questions");
+
+let localTriviaQuestions = [];
+
 const podium1Name = document.getElementById("podium-1-name");
 const podium1Score = document.getElementById("podium-1-score");
 const podium1AvatarContainer = document.getElementById("podium-1-avatar-container");
@@ -236,6 +246,150 @@ btnAdminTriviaEnd.addEventListener("click", () => {
 
 btnClosePodium.addEventListener("click", () => {
   adminPodiumModal.classList.add("hidden");
+});
+
+// Questions editor handlers
+btnAdminTriviaEdit.addEventListener("click", () => {
+  socket.emit("admin:trivia_get_questions");
+});
+
+btnCloseTriviaEdit.addEventListener("click", () => {
+  adminTriviaEditModal.classList.add("hidden");
+});
+
+socket.on("admin:trivia_questions_list", (questionsList) => {
+  localTriviaQuestions = questionsList;
+  renderQuestionsEditor();
+  adminTriviaEditModal.classList.remove("hidden");
+});
+
+function renderQuestionsEditor() {
+  triviaQuestionsEditorList.innerHTML = "";
+  localTriviaQuestions.forEach((q, qIdx) => {
+    const card = document.createElement("div");
+    card.style = "background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 16px; position: relative;";
+    card.innerHTML = `
+      <div style="position: absolute; top: 12px; right: 12px;">
+        <button class="btn-delete-q" data-idx="${qIdx}" style="background: rgba(255,74,90,0.1); border: 1px solid var(--danger); color: var(--danger); border-radius: 6px; padding: 4px 8px; font-size: 0.75rem; cursor: pointer;">Eliminar 🗑️</button>
+      </div>
+      <h4 style="margin: 0 0 12px; font-family: var(--font-title); font-size: 1rem; color: var(--accent-gold);">Pregunta ${qIdx + 1}</h4>
+      
+      <div class="form-group" style="margin-bottom: 10px;">
+        <label style="font-size: 0.75rem;">Texto de la Pregunta</label>
+        <input type="text" class="edit-q-text" data-idx="${qIdx}" value="${q.question}" placeholder="Ej: ¿De qué color es...?" style="padding: 8px 12px; font-size: 0.85rem;" required>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px;">
+        <div>
+          <label style="font-size: 0.7rem;">Opción 1</label>
+          <input type="text" class="edit-q-opt" data-idx="${qIdx}" data-opt="0" value="${q.options[0] || ''}" style="padding: 6px 10px; font-size: 0.8rem;" required>
+        </div>
+        <div>
+          <label style="font-size: 0.7rem;">Opción 2</label>
+          <input type="text" class="edit-q-opt" data-idx="${qIdx}" data-opt="1" value="${q.options[1] || ''}" style="padding: 6px 10px; font-size: 0.8rem;" required>
+        </div>
+        <div>
+          <label style="font-size: 0.7rem;">Opción 3</label>
+          <input type="text" class="edit-q-opt" data-idx="${qIdx}" data-opt="2" value="${q.options[2] || ''}" style="padding: 6px 10px; font-size: 0.8rem;" required>
+        </div>
+        <div>
+          <label style="font-size: 0.7rem;">Opción 4</label>
+          <input type="text" class="edit-q-opt" data-idx="${qIdx}" data-opt="3" value="${q.options[3] || ''}" style="padding: 6px 10px; font-size: 0.8rem;" required>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+        <div class="form-group">
+          <label style="font-size: 0.75rem;">Opción Correcta</label>
+          <select class="edit-q-correct" data-idx="${qIdx}" style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.15); color: white; border-radius: 6px; padding: 6px; font-size: 0.8rem; width: 100%;">
+            <option value="0" ${q.correctIndex === 0 ? 'selected' : ''}>Opción 1</option>
+            <option value="1" ${q.correctIndex === 1 ? 'selected' : ''}>Opción 2</option>
+            <option value="2" ${q.correctIndex === 2 ? 'selected' : ''}>Opción 3</option>
+            <option value="3" ${q.correctIndex === 3 ? 'selected' : ''}>Opción 4</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label style="font-size: 0.75rem;">Límite de Tiempo (Seg)</label>
+          <input type="number" class="edit-q-time" data-idx="${qIdx}" value="${q.timeLimit || 15}" min="5" max="60" style="padding: 6px 10px; font-size: 0.8rem;" required>
+        </div>
+      </div>
+    `;
+    triviaQuestionsEditorList.appendChild(card);
+  });
+
+  // Bind deletes
+  triviaQuestionsEditorList.querySelectorAll(".btn-delete-q").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const idx = parseInt(btn.getAttribute("data-idx"), 10);
+      localTriviaQuestions.splice(idx, 1);
+      renderQuestionsEditor();
+    });
+  });
+}
+
+// Add question form template
+btnAddTriviaQuestion.addEventListener("click", () => {
+  localTriviaQuestions.push({
+    question: "",
+    options: ["", "", "", ""],
+    correctIndex: 0,
+    timeLimit: 15
+  });
+  renderQuestionsEditor();
+  // Scroll to bottom
+  setTimeout(() => {
+    triviaQuestionsEditorList.scrollTop = triviaQuestionsEditorList.scrollHeight;
+  }, 50);
+});
+
+// Save questions back to server
+btnSaveTriviaQuestions.addEventListener("click", () => {
+  // Collect inputs
+  const finalQuestions = [];
+  let hasError = false;
+
+  for (let i = 0; i < localTriviaQuestions.length; i++) {
+    const qTextEl = triviaQuestionsEditorList.querySelector(`.edit-q-text[data-idx="${i}"]`);
+    const qCorrectEl = triviaQuestionsEditorList.querySelector(`.edit-q-correct[data-idx="${i}"]`);
+    const qTimeEl = triviaQuestionsEditorList.querySelector(`.edit-q-time[data-idx="${i}"]`);
+    
+    if (!qTextEl.value.trim()) {
+      alert(`Por favor completa el texto de la pregunta ${i + 1}`);
+      hasError = true;
+      break;
+    }
+
+    const opts = [];
+    for (let oIdx = 0; oIdx < 4; oIdx++) {
+      const optEl = triviaQuestionsEditorList.querySelector(`.edit-q-opt[data-idx="${i}"][data-opt="${oIdx}"]`);
+      if (!optEl.value.trim()) {
+        alert(`Por favor completa la Opción ${oIdx + 1} de la pregunta ${i + 1}`);
+        hasError = true;
+        break;
+      }
+      opts.push(optEl.value.trim());
+    }
+
+    if (hasError) break;
+
+    finalQuestions.push({
+      question: qTextEl.value.trim(),
+      options: opts,
+      correctIndex: parseInt(qCorrectEl.value, 10),
+      timeLimit: parseInt(qTimeEl.value, 10) || 15
+    });
+  }
+
+  if (hasError) return;
+
+  if (finalQuestions.length === 0) {
+    alert("Debe haber al menos 1 pregunta en la Trivia.");
+    return;
+  }
+
+  socket.emit("admin:trivia_update_questions", finalQuestions);
+  adminTriviaEditModal.classList.add("hidden");
+  alert(`¡Trivia configurada con éxito! Se cargaron ${finalQuestions.length} preguntas.`);
 });
 
 // Helper to render avatar for podium

@@ -801,6 +801,26 @@ io.on('connection', (socket) => {
     broadcastTriviaState();
   });
 
+  socket.on('admin:trivia_get_questions', () => {
+    socket.emit('admin:trivia_questions_list', state.trivia.questions);
+  });
+
+  socket.on('admin:trivia_update_questions', (questions) => {
+    if (Array.isArray(questions)) {
+      // Keep safety limits
+      state.trivia.questions = questions.map((q, idx) => ({
+        id: idx,
+        question: q.question || "",
+        options: Array.isArray(q.options) ? q.options.slice(0, 4) : ["A", "B", "C", "D"],
+        correctIndex: parseInt(q.correctIndex, 10) || 0,
+        timeLimit: parseInt(q.timeLimit, 10) || 15
+      }));
+      console.log(`[TRIVIA] Questions updated by Admin. Total: ${state.trivia.questions.length}`);
+      // Notify all admins of the update
+      io.emit('admin:trivia_questions_list', state.trivia.questions);
+    }
+  });
+
   socket.on('trivia:request_sync', () => {
     const userId = state.socketToUser[socket.id];
     if (userId) {
