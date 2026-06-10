@@ -55,6 +55,28 @@ socket.on("state:sync", (data) => {
       btn.classList.remove("active");
     }
   });
+
+  // Dynamically show/hide game control panels reactively
+  if (activeModule === "trivia") {
+    adminTriviaCard.classList.remove("hidden");
+    socket.emit("admin:request_trivia_sync");
+  } else {
+    adminTriviaCard.classList.add("hidden");
+  }
+
+  if (activeModule === "impostorMusical") {
+    adminImpostorCard.classList.remove("hidden");
+    socket.emit("admin:request_impostor_sync");
+  } else {
+    adminImpostorCard.classList.add("hidden");
+  }
+
+  if (activeModule === "misionesFlash") {
+    adminMisionesCard.classList.remove("hidden");
+    socket.emit("admin:request_misiones_sync");
+  } else {
+    adminMisionesCard.classList.add("hidden");
+  }
   
   console.log("Sync state received:", data);
 });
@@ -192,15 +214,6 @@ const podium3Name = document.getElementById("podium-3-name");
 const podium3Score = document.getElementById("podium-3-score");
 const podium3AvatarContainer = document.getElementById("podium-3-avatar-container");
 
-// Request Trivia Sync if the current active module is trivia when admin page loads
-socket.on("state:sync", (data) => {
-  if (data.activeModule === "trivia") {
-    adminTriviaCard.classList.remove("hidden");
-    socket.emit("admin:request_trivia_sync");
-  } else {
-    adminTriviaCard.classList.add("hidden");
-  }
-});
 
 // Bind Admin buttons
 btnAdminTriviaStart.addEventListener("click", () => {
@@ -238,14 +251,13 @@ const renderPodiumAvatar = (user) => {
 socket.on("admin:trivia_update", (data) => {
   console.log("Admin Trivia update received:", data);
 
-  // Toggle card visibility based on module active status
-  if (!data.active && data.currentQuestionIndex === -1) {
-    // Game is idle or not running
+  // Solamente actuar si el módulo activo actual es realmente trivia
+  if (document.querySelector(".btn-module-control[data-module='trivia']").classList.contains("active")) {
+    adminTriviaCard.classList.remove("hidden");
+  } else {
     adminTriviaCard.classList.add("hidden");
     return;
   }
-
-  adminTriviaCard.classList.remove("hidden");
 
   if (data.currentQuestionIndex === -1) {
     adminTriviaNotStarted.classList.remove("hidden");
@@ -253,6 +265,7 @@ socket.on("admin:trivia_update", (data) => {
   } else {
     adminTriviaNotStarted.classList.add("hidden");
     adminTriviaActive.classList.remove("hidden");
+
 
     // Populate question details
     const totalQuestions = data.question ? 10 : 0; // standard 10 questions
@@ -371,15 +384,6 @@ const adminImpostorTablesPanel = document.getElementById("admin-impostor-tables-
 const adminImpostorTablesLog = document.getElementById("admin-impostor-tables-log");
 const adminImpostorActiveModeBadge = document.getElementById("admin-impostor-active-mode-badge");
 
-// Listen for module switch sync
-socket.on("state:sync", (data) => {
-  if (data.activeModule === "impostorMusical") {
-    adminImpostorCard.classList.remove("hidden");
-    socket.emit("admin:request_impostor_sync");
-  } else {
-    adminImpostorCard.classList.add("hidden");
-  }
-});
 
 // Bind Admin buttons
 btnAdminImpostorStart.addEventListener("click", () => {
@@ -405,12 +409,13 @@ btnAdminImpostorEnd.addEventListener("click", () => {
 socket.on("admin:impostor_update", (data) => {
   console.log("Admin Impostor update received:", data);
 
-  if (!data.active && data.currentRoundIndex === -1) {
+  // Solamente actuar si el módulo activo actual es realmente impostorMusical
+  if (document.querySelector(".btn-module-control[data-module='impostorMusical']").classList.contains("active")) {
+    adminImpostorCard.classList.remove("hidden");
+  } else {
     adminImpostorCard.classList.add("hidden");
     return;
   }
-
-  adminImpostorCard.classList.remove("hidden");
 
   if (data.currentRoundIndex === -1) {
     adminImpostorNotStarted.classList.remove("hidden");
@@ -418,6 +423,7 @@ socket.on("admin:impostor_update", (data) => {
   } else {
     adminImpostorNotStarted.classList.add("hidden");
     adminImpostorActive.classList.remove("hidden");
+
 
     // Populate question details
     const totalRounds = 5;
@@ -600,15 +606,6 @@ const projectionImg = document.getElementById("projection-img");
 const projectionMisionTitle = document.getElementById("projection-mision-title");
 const projectionAuthor = document.getElementById("projection-author");
 
-// Module sync listener
-socket.on("state:sync", (data) => {
-  if (data.activeModule === "misionesFlash") {
-    adminMisionesCard.classList.remove("hidden");
-    socket.emit("admin:request_misiones_sync");
-  } else {
-    adminMisionesCard.classList.add("hidden");
-  }
-});
 
 // Bind Admin buttons
 btnAdminMisionesStart.addEventListener("click", () => {
@@ -675,14 +672,17 @@ btnCloseProjection.addEventListener("click", () => {
 socket.on("admin:misiones_update", (data) => {
   console.log("Admin Misiones update received:", data);
   
-  if (!data.active) {
+  // Solamente actuar si el módulo activo actual es realmente misionesFlash
+  if (document.querySelector(".btn-module-control[data-module='misionesFlash']").classList.contains("active")) {
+    adminMisionesCard.classList.remove("hidden");
+  } else {
     adminMisionesCard.classList.add("hidden");
     return;
   }
   
-  adminMisionesCard.classList.remove("hidden");
   adminMisionesNotStarted.classList.add("hidden");
   adminMisionesActive.classList.remove("hidden");
+
   
   adminMisionesCount.textContent = data.totalSubmissions;
   adminMisionesTotalPlayers.textContent = data.totalPlayers;

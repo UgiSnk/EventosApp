@@ -1010,6 +1010,48 @@ socket.on("trivia:game_over", (data) => {
   const myRankEntry = leaderboard.find(entry => entry.userId === currentUser.userId);
   triviaFinalScore.textContent = myRankEntry ? myRankEntry.score : 0;
 
+  // Helper to render podium avatar
+  const renderClientPodiumAvatar = (user) => {
+    if (user && user.avatar) {
+      return `<img src="${user.avatar}" class="guest-avatar" style="width: 44px; height: 44px; border-radius: 50%; object-fit: cover; border: 2px solid var(--accent-gold);" alt="${user.name}">`;
+    }
+    const initial = user && user.name ? user.name.charAt(0).toUpperCase() : "?";
+    return `<div class="guest-avatar-placeholder" style="width: 44px; height: 44px; border-radius: 50%; background: linear-gradient(135deg, var(--accent-gold) 0%, var(--accent-pink) 100%); color: var(--bg-primary); font-weight: 800; font-size: 1.1rem; display: flex; align-items: center; justify-content: center; border: 2px solid var(--accent-gold);">${initial}</div>`;
+  };
+
+  // DOM elements for client podium
+  const p1Name = document.getElementById("trivia-client-podium-1-name");
+  const p1Avatar = document.getElementById("trivia-client-podium-1-avatar");
+  const p2Name = document.getElementById("trivia-client-podium-2-name");
+  const p2Avatar = document.getElementById("trivia-client-podium-2-avatar");
+  const p3Name = document.getElementById("trivia-client-podium-3-name");
+  const p3Avatar = document.getElementById("trivia-client-podium-3-avatar");
+
+  // Reset Client Podium
+  p1Name.textContent = "-";
+  p1Avatar.innerHTML = renderClientPodiumAvatar(null);
+  p2Name.textContent = "-";
+  p2Avatar.innerHTML = renderClientPodiumAvatar(null);
+  p3Name.textContent = "-";
+  p3Avatar.innerHTML = renderClientPodiumAvatar(null);
+
+  // Fill in client podium rankings dynamically
+  if (leaderboard.length >= 1) {
+    const p1 = leaderboard[0];
+    p1Name.textContent = p1.name;
+    p1Avatar.innerHTML = renderClientPodiumAvatar(p1);
+  }
+  if (leaderboard.length >= 2) {
+    const p2 = leaderboard[1];
+    p2Name.textContent = p2.name;
+    p2Avatar.innerHTML = renderClientPodiumAvatar(p2);
+  }
+  if (leaderboard.length >= 3) {
+    const p3 = leaderboard[2];
+    p3Name.textContent = p3.name;
+    p3Avatar.innerHTML = renderClientPodiumAvatar(p3);
+  }
+
   // Render Leaderboard table list
   triviaClientLeaderboard.innerHTML = "";
   if (leaderboard.length === 0) {
@@ -1040,6 +1082,7 @@ socket.on("trivia:game_over", (data) => {
     triviaClientLeaderboard.appendChild(row);
   });
 });
+
 
 /* --- Timed Impostor Client Module --- */
 

@@ -733,6 +733,7 @@ input[type="text"]:focus {
   font-style: italic;
 }
 
+
 /* Slide-Over Chat Panel */
 .chat-panel {
   position: fixed;
@@ -740,7 +741,7 @@ input[type="text"]:focus {
   right: 0;
   width: 100%;
   max-width: 480px; /* Constrain to mobile app width */
-  height: 100vh;
+  height: 100dvh; /* Dynamic viewport height to prevent keyboard overlay issues */
   background: var(--bg-primary);
   background-image: var(--bg-gradient);
   z-index: 50;
@@ -749,6 +750,7 @@ input[type="text"]:focus {
   box-shadow: -10px 0 30px rgba(0, 0, 0, 0.5);
   animation: slideInRight 0.35s cubic-bezier(0.25, 0.8, 0.25, 1);
   transition: transform 0.35s cubic-bezier(0.25, 0.8, 0.25, 1);
+  padding-bottom: env(safe-area-inset-bottom, 0px); /* Support iOS notch and home indicator spacing */
 }
 
 @keyframes slideInRight {
@@ -764,6 +766,7 @@ input[type="text"]:focus {
   border-bottom: 1px solid var(--card-border);
   background: rgba(9, 5, 20, 0.8);
   backdrop-filter: blur(10px);
+  padding-top: calc(16px + env(safe-area-inset-top, 0px)); /* Spacing for status bar */
 }
 
 .btn-back {
@@ -800,6 +803,7 @@ input[type="text"]:focus {
 }
 
 .chat-avatar-small-placeholder {
+
   width: 36px;
   height: 36px;
   border-radius: 50%;
@@ -888,9 +892,9 @@ input[type="text"]:focus {
 
 /* Chat Form */
 .chat-send-form {
-  padding: 16px 20px;
+  padding: 16px 20px calc(16px + env(safe-area-inset-bottom, 0px));
   border-top: 1px solid var(--card-border);
-  background: rgba(9, 5, 20, 0.9);
+  background: rgba(9, 5, 20, 0.95);
   display: flex;
   gap: 10px;
   align-items: center;
